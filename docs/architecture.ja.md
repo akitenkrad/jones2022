@@ -10,12 +10,12 @@ replications/jones2022/
 ├── pyproject.toml              # uv workspace (members = ["tools"])
 ├── simulation/                 # Rust crate `jones2022-simulation` (bin `jones`)
 │   ├── data/
-│   │   └── humaneval_sample.jsonl  # バンドル 8 問 HumanEval subset（オフライン用）
+│   │   └── humaneval_sample.jsonl  # バンドル 8 問 HumanEval subset（オフライン用；フルセットは data/HumanEval.jsonl に取得・git 管理外）
 │   └── src/
 │       ├── main.rs             # clap: run / sweep / reproduce + 結果書き出し
 │       ├── lib.rs              # crate root；socsim 委譲表
 │       ├── config.rs           # Experiment (E1–E7)，FRAMING_LINES，ANCHOR_LINES，Config
-│       ├── datasets.rs         # HumanEval ローダ（subset / フルセット）+ MathEquations
+│       ├── datasets.rs         # HumanEval ローダ（subset / フルセット）+ MathEquations（curate 済み8問 + シード生成器）
 │       ├── transforms.rs       # 意味保存変換 T（IPF / アンカー関数 / 順序反転 / 矛盾名）
 │       ├── indicators.rs       # 失敗指標 φ（逐語コピー / アンカー行 / distractor token）
 │       ├── eval.rs             # run_experiment: 変換 → 問い合わせ → sandbox → φ → MetricRow（E1–E4）

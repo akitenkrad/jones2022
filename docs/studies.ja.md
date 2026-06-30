@@ -48,6 +48,8 @@ Jones & Steinhardt (2022) は人間の認知バイアスを，LLM の質的失�
 
 **設定**: 演算のグループ化が結果を左右する算術関数の小集合（例「x と y の和を取り，2 倍する」）に対し，誤った演算順序のヒントを前置する．バイアスのかかったモデルはより «想起しやすい» 素朴なグループ化 — 問題の distractor 解 — を既定とし，それは今や誤りである．単体テストは不変．
 
+> **データセット（E4 と共有）**: 論文の MathEquations は著者独自・非公開のため，本実装では生成する．curate 済み8問を同梱し，`--math-count N --math-seed S` で論文の ~90問/設定 規模まで決定論的にスケールする（8問は安定 prefix，超過分は演算子優先順位テンプレートから生成）．生成問題も「`distractor_token` は誤答本体にのみ現れ，テストは 2 つの解釈が食い違う入力で canonical 値を assert する」という不変条件を保つので，バイアス補完は必ずテストに落ちる．[CLI](cli.ja.md#mathequations--生成セットe3e4) を参照．
+
 **指標**: `Δ` と，出力が unary-first distractor になる率．論文参照値: 正解率は **0.50 → 0.17** に低下し，反転誤りの **75%** が unary-first 解である．
 
 **CLI**: `jones run --experiment availability`．アンカー `availability_delta`（0.33），`availability_unary_first_rate`（0.75）．

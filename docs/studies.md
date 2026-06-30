@@ -48,6 +48,8 @@ This page explains what each experiment tests, its transform and indicator, its 
 
 **The setup.** Over a small set of arithmetic functions whose operation grouping matters (e.g. "return the sum of x and y, then multiply by 2"), prepend a misleading operation-order hint. The biased model defaults to the more "available" naïve grouping — the problem's distractor solution — which is now wrong. The unit test is unchanged.
 
+> **The dataset (shared with E4).** The paper's MathEquations set is the authors' own and is not public, so this implementation synthesizes it. It ships as a curated 8 problems and scales toward the paper's ~90-per-setting size with `--math-count N --math-seed S` (deterministic; the 8 are a stable prefix, extras come from operator-precedence templates). Every generated problem keeps the invariant that its `distractor_token` occurs only in the wrong body and its test asserts the *canonical* value on inputs where the two readings disagree, so a biased completion provably fails. See [CLI](cli.md#mathequations--the-generated-set-e3e4).
+
 **Metric.** `Δ` and the rate at which the output is the unary-first distractor. The paper's reference values: accuracy drops **0.50 → 0.17**, and **75%** of the reversal errors are the unary-first solution.
 
 **CLI.** `jones run --experiment availability`; anchors `availability_delta` (0.33) and `availability_unary_first_rate` (0.75).

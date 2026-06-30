@@ -38,9 +38,16 @@ cargo run --release -- run --experiment framing --model codellama --limit 2
 
 `--limit N` は先頭 N 問（E1–E4）のみを残す．採用した HumanEval セットと件数はログ出力され，スコープは明示される．
 
+E1/E2 をフル 164 問の HumanEval で走らせるには，一度取得して `--full` を渡す:
+
+```bash
+uv run jones-tools fetch-dataset                         # → data/HumanEval.jsonl（164 問, MIT）
+cargo run --release -- run --experiment framing --model codellama --full
+```
+
 ## 4. 利用可能性と属性置換（E3 / E4）
 
-MathEquations 実験は外部データを必要としない:
+MathEquations 実験は外部データを必要としない — セットはコード内で生成する:
 
 ```bash
 cargo run --release -- run --experiment availability --mock
@@ -49,6 +56,12 @@ uv run jones-tools visualize results/latest
 ```
 
 各々 `baseline` 行と 1 つの `transform` 行を書き出す．`transform` 行の `Δ` は正解率低下，`r` は出力が distractor になる率（E3 は unary-first 解，E4 は named 演算）である．
+
+セットは curate 済み8問を同梱し，`--math-count N --math-seed S` で論文の ~90問/設定 規模まで決定論的にスケールする（8問は安定 prefix，超過分は演算子優先順位テンプレートから生成）．実際の `n` とシードは `config.json` に記録される:
+
+```bash
+cargo run --release -- run --experiment availability --mock --math-count 90 --math-seed 7
+```
 
 ## 5. GPT-3 再現（E5 / E6）
 

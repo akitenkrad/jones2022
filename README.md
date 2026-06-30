@@ -52,7 +52,9 @@ uv run jones-tools visualize results/latest
 uv run jones-tools reproduce-paper results/latest
 ```
 
-HumanEval ships as a small **bundled 8-problem subset** so everything runs offline; point the loader at the official 164-problem set with `--dataset <HumanEval.jsonl>` (or by adding `data/HumanEval.jsonl`) — the chosen set and its size are always logged, never silently truncated.
+HumanEval ships as a small **bundled 8-problem subset** so everything runs offline. To run the full 164-problem set, fetch it once with `uv run jones-tools fetch-dataset` (downloads the official MIT-licensed set to `data/HumanEval.jsonl`, which the loader auto-detects under `--full`), or point the loader at any copy with `--dataset <HumanEval.jsonl>` — the chosen set and its size are always logged, never silently truncated. The full set is git-ignored; only the subset is tracked.
+
+The paper's other dataset, **MathEquations**, is the authors' own and is not public, so the replication synthesizes it. It ships as a curated 8-problem set and scales deterministically with `--math-count N --math-seed S` (the 8 stay a stable prefix; extras are generated from operator-precedence templates, each preserving the dataset's invariants). See [CLI](docs/cli.md#mathequations--the-generated-set-e3e4).
 
 Each `run` writes `results/{timestamp}/` with `config.json` and `metrics.csv`; `sweep` writes `results/sweep_{timestamp}/` with `sweep_summary.csv` and `sweep_config.json`; `reproduce` adds `paper_anchors.csv` and `reproduce_summary.csv`. The Python tools render PNGs alongside them.
 

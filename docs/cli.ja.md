@@ -43,6 +43,8 @@ cargo run --release -- run --experiment file-deletion --model codellama --num-pa
 | `--dataset <PATH>` | — | HumanEval JSONL パス（E1/E2）；省略でバンドル subset |
 | `--full` | `false` | `data/HumanEval.jsonl` があればフルセットを優先（E1/E2） |
 | `--limit <N>` | `0` | 先頭 N 問のみ評価（0 = 全件）；スコープ付きライブスモーク用 |
+| `--math-count <N>` | `8` | E3/E4 MathEquations の問題数；curate 済み8問が安定 prefix，超過分は生成 |
+| `--math-seed <S>` | `42` | curate 済み8問を超える MathEquations 生成のシード（E3/E4） |
 | `--anchor-ratio <p>` | `0.5` | E5 アンカー比率（高 = a(1+p)，低 = a(1−p)） |
 | `--respondents <N>` | `10` | E6 フレーミング回答者数 |
 | `--num-packages <N>` | `3` | E7「アンインストール」パッケージ数 |
@@ -51,6 +53,14 @@ cargo run --release -- run --experiment file-deletion --model codellama --num-pa
 | `--ollama-host <URL>` | — | `OLLAMA_HOST` を上書き（グローバルフラグ） |
 
 出力（`results/{stamp}/` 下）: `config.json` と `metrics.csv`（long: `experiment, variant, condition, n, functional_accuracy, indicator_rate, delta`）．コード実験（E1–E4）では `baseline` 行が機能的正解率を，`transform` 行が正解率 + 指標 + `Δ` を持つ．E5/E6/E7 では正解率は `NaN` で，信号は指標率である．
+
+#### MathEquations — 生成セット（E3/E4）
+
+HumanEval と違い，論文の MathEquations は著者独自・非公開のため，再現実装では**プログラム生成**する．`--math-count`/`--math-seed` で決定論的にスケールでき，curate 済み8問が安定 prefix，超過分は演算子優先順位テンプレート（例: `(x + y) * k` と素朴な誤読 `x + y * k`）から生成する．生成問題もデータセットの不変条件を保つ — `distractor_token` は誤答本体にのみ現れ，単体テストは **2 つの解釈が食い違う入力で canonical 値**を assert するので，バイアス補完は必ずテストに落ちる．実際の `n` とシードは `config.json`（`dataset: "math_equations(n=…, seed=…)"`）に記録される．`--math-count 8`（既定）は元の curate 済みセットをそのまま再現する．
+
+```bash
+cargo run -p jones2022-simulation -- run --experiment availability --math-count 90 --math-seed 7
+```
 
 ### `sweep` — パラメータ掃引
 
@@ -95,13 +105,14 @@ cargo run --release -- reproduce
 
 ## Python `jones-tools`
 
-ワークスペースルートで `uv sync` し，`uv run jones-tools <subcommand>` で起動する．CLI のディスパッチ先: `visualize`・`visualize-sweep`・`show-experiment-settings`・`reproduce-paper`．各々，結果ディレクトリを位置引数またはフラグで取る（既定 `results/latest`）．
+ワークスペースルートで `uv sync` し，`uv run jones-tools <subcommand>` で起動する．CLI のディスパッチ先: `visualize`・`visualize-sweep`・`show-experiment-settings`・`reproduce-paper`・`fetch-dataset`．図系サブコマンドは結果ディレクトリを位置引数またはフラグで取る（既定 `results/latest`）．
 
 ```bash
 uv run jones-tools visualize results/latest                 # または --results-dir DIR
 uv run jones-tools visualize-sweep results/sweep_20260101_120000   # または --sweep-dir DIR
 uv run jones-tools show-experiment-settings results/latest  # または --results-dir DIR
 uv run jones-tools reproduce-paper results/latest           # または --results-dir / --summary-csv
+uv run jones-tools fetch-dataset                            # 公式 HumanEval 164 問を取得
 ```
 
 | サブコマンド | 役割 | 入力 | 出力 |
@@ -110,8 +121,26 @@ uv run jones-tools reproduce-paper results/latest           # または --result
 | `visualize-sweep` | 掃引パラメータ × 指標（と Δ） | `sweep_summary.csv` + `sweep_config.json` | `fig_sweep.png` |
 | `show-experiment-settings` | run 設定の整形表示 | `config.json` | —（コンソール） |
 | `reproduce-paper` | アンカー別 観測 vs 論文 の図 | `reproduce_summary.csv` | `reproduce_paper.png` |
+| `fetch-dataset` | 公式 HumanEval セットの取得 | ネットワーク（`openai/human-eval`, MIT） | `simulation/data/HumanEval.jsonl` |
 
 図はヘッドレス（Agg）バックエンドを用いるため，ディスプレイ無しの CI でも描画される．[可視化](visualization.ja.md) を参照．
+
+### `fetch-dataset` — 公式 HumanEval セット
+
+本リポジトリは完全オフラインで動くよう，curate した 8 問サブセットのみを同梱している．`fetch-dataset` はフルの **164 問** セット（`openai/human-eval`, MIT ライセンス）をダウンロードし `simulation/data/HumanEval.jsonl` に書き出す．これは Rust ローダが自動検出するパスなので，取得後は `jones run ... --full` でそのまま 164 問を実行できる（追加配線不要）．取得できるのは HumanEval のみで，論文の MathEquations は著者独自・非公開（再現実装ではコード合成）．
+
+```bash
+uv run jones-tools fetch-dataset            # → simulation/data/HumanEval.jsonl（164 問）
+cargo run -p jones2022-simulation -- run --experiment framing --full
+```
+
+| フラグ | 既定 | 意味 |
+|---|---|---|
+| `--output <PATH>` | `<repo>/simulation/data/HumanEval.jsonl` | JSONL の保存先 |
+| `--url <URL>` | `openai/human-eval` の `HumanEval.jsonl.gz` raw URL | 取得元アーカイブ（gzip 圧縮 JSONL） |
+| `--force` | `false` | 妥当なファイルが既にあっても再取得 |
+
+**冪等**（妥当な 164 問ファイルがあれば skip），**アトミック書き込み**（一時ファイル→rename．中断しても壊れた本体を残さない），ピン留めした SHA-256 と 164 問スキーマで**検証**（不一致なら部分保存せず明示エラー），URL・ライセンス・バイト数・SHA-256・問題数を表示する．ダウンロードしたフルセットは git 管理外（追跡されるのは 8 問サブセットのみ）．取得は常に明示的な別ステップで，`run` から暗黙取得はしない（offline-first）．
 
 ## 結果レイアウト
 

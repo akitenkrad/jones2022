@@ -43,6 +43,8 @@ cargo run --release -- run --experiment file-deletion --model codellama --num-pa
 | `--dataset <PATH>` | — | HumanEval JSONL path (E1/E2); omit to use the bundled subset |
 | `--full` | `false` | prefer the full set at `data/HumanEval.jsonl` if present (E1/E2) |
 | `--limit <N>` | `0` | evaluate only the first N code problems (0 = all); for scoped live smokes |
+| `--math-count <N>` | `8` | E3/E4 MathEquations set size; the curated 8 are a stable prefix, extras are generated |
+| `--math-seed <S>` | `42` | seed for generating MathEquations problems past the curated 8 (E3/E4) |
 | `--anchor-ratio <p>` | `0.5` | E5 anchor ratio (high = a(1+p), low = a(1−p)) |
 | `--respondents <N>` | `10` | E6 number of framing respondents |
 | `--num-packages <N>` | `3` | E7 number of packages to "uninstall" |
@@ -51,6 +53,14 @@ cargo run --release -- run --experiment file-deletion --model codellama --num-pa
 | `--ollama-host <URL>` | — | override `OLLAMA_HOST` (global flag) |
 
 Outputs (under `results/{stamp}/`): `config.json` and `metrics.csv` (long: `experiment, variant, condition, n, functional_accuracy, indicator_rate, delta`). For code experiments (E1–E4) a `baseline` row carries functional accuracy and the `transform` rows carry accuracy + indicator + `Δ`; for E5/E6/E7 accuracy is `NaN` and the signal is the indicator rate.
+
+#### MathEquations — the generated set (E3/E4)
+
+Unlike HumanEval, the paper's MathEquations set is the authors' own and is not public, so the replication **synthesizes** it. `--math-count`/`--math-seed` scale it deterministically: the curated 8 problems are a stable prefix, and any extras are generated from operator-precedence templates (e.g. `(x + y) * k` vs the naïve `x + y * k`). Each generated problem keeps the dataset's invariants — its `distractor_token` occurs only in the wrong body, and its unit test asserts the *canonical* value on inputs where the two readings disagree, so a biased completion provably fails. The exact `n` and seed are recorded in `config.json` (`dataset: "math_equations(n=…, seed=…)"`). `--math-count 8` (the default) reproduces the original curated set unchanged.
+
+```bash
+cargo run -p jones2022-simulation -- run --experiment availability --math-count 90 --math-seed 7
+```
 
 ### `sweep` — vary a parameter
 
@@ -95,13 +105,14 @@ It never panics on missing data: anchors with no observation become `NO_DATA`. O
 
 ## Python `jones-tools`
 
-Install at the workspace root with `uv sync`, then invoke via `uv run jones-tools <subcommand>`. The CLI dispatches: `visualize`, `visualize-sweep`, `show-experiment-settings`, `reproduce-paper`. Each takes a results dir positionally or via a flag (default `results/latest`).
+Install at the workspace root with `uv sync`, then invoke via `uv run jones-tools <subcommand>`. The CLI dispatches: `visualize`, `visualize-sweep`, `show-experiment-settings`, `reproduce-paper`, `fetch-dataset`. The figure subcommands take a results dir positionally or via a flag (default `results/latest`).
 
 ```bash
 uv run jones-tools visualize results/latest                 # or --results-dir DIR
 uv run jones-tools visualize-sweep results/sweep_20260101_120000   # or --sweep-dir DIR
 uv run jones-tools show-experiment-settings results/latest  # or --results-dir DIR
 uv run jones-tools reproduce-paper results/latest           # or --results-dir / --summary-csv
+uv run jones-tools fetch-dataset                            # fetch the official 164-problem HumanEval
 ```
 
 | Subcommand | Role | Reads | Writes |
@@ -110,8 +121,26 @@ uv run jones-tools reproduce-paper results/latest           # or --results-dir /
 | `visualize-sweep` | swept parameter × indicator (and Δ) | `sweep_summary.csv` + `sweep_config.json` | `fig_sweep.png` |
 | `show-experiment-settings` | pretty-print the run config | `config.json` | — (console) |
 | `reproduce-paper` | per-anchor observed-vs-paper figure | `reproduce_summary.csv` | `reproduce_paper.png` |
+| `fetch-dataset` | download the official HumanEval set | network (`openai/human-eval`, MIT) | `simulation/data/HumanEval.jsonl` |
 
 Figures use a headless (Agg) backend, so they render in CI without a display. See [Visualization](visualization.md).
+
+### `fetch-dataset` — the official HumanEval set
+
+The repo ships only a curated 8-problem HumanEval subset so everything runs offline. `fetch-dataset` downloads the full **164-problem** set (`openai/human-eval`, MIT-licensed) and writes it to `simulation/data/HumanEval.jsonl` — exactly the path the Rust loader auto-detects, so `jones run ... --full` then runs all 164 problems with no further wiring. Only HumanEval is fetchable; the paper's MathEquations set is the authors' own and is not public (the replication synthesizes it in code).
+
+```bash
+uv run jones-tools fetch-dataset            # → simulation/data/HumanEval.jsonl (164 problems)
+cargo run -p jones2022-simulation -- run --experiment framing --full
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--output <PATH>` | `<repo>/simulation/data/HumanEval.jsonl` | where to write the JSONL |
+| `--url <URL>` | the `openai/human-eval` `HumanEval.jsonl.gz` raw URL | source archive (gzipped JSONL) |
+| `--force` | `false` | re-fetch even if a valid file already exists |
+
+It is **idempotent** (skips when a valid 164-problem file is already present), writes **atomically** (temp file → rename, so an interrupted run never leaves a corrupt file), **verifies** the download against a pinned SHA-256 and the expected 164-problem schema (failing loudly rather than saving a partial set), and prints the URL, license, byte size, SHA-256, and problem count. The downloaded full set is git-ignored — only the 8-problem subset stays tracked. Download is always an explicit, separate step: `run` never fetches implicitly (offline-first).
 
 ## Results layout
 

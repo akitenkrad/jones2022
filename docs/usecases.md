@@ -38,9 +38,16 @@ cargo run --release -- run --experiment framing --model codellama --limit 2
 
 `--limit N` keeps only the first N code problems (E1–E4). The chosen HumanEval set and its size are logged, so the scoping is explicit.
 
+To run E1/E2 over the full 164-problem HumanEval set, fetch it once and pass `--full`:
+
+```bash
+uv run jones-tools fetch-dataset                         # → data/HumanEval.jsonl (164 problems, MIT)
+cargo run --release -- run --experiment framing --model codellama --full
+```
+
 ## 4. Availability and attribute substitution (E3 / E4)
 
-The MathEquations experiments need no external data:
+The MathEquations experiments need no external data — the set is synthesized in code:
 
 ```bash
 cargo run --release -- run --experiment availability --mock
@@ -49,6 +56,12 @@ uv run jones-tools visualize results/latest
 ```
 
 Each writes a `baseline` row and one `transform` row whose `Δ` is the accuracy drop and whose `r` is the rate at which the output is the distractor (unary-first solution for E3, named operation for E4).
+
+The set ships as a curated 8 problems and scales deterministically toward the paper's ~90-per-setting size with `--math-count N --math-seed S` (the 8 stay a stable prefix; extras are generated from operator-precedence templates). The exact `n` and seed are recorded in `config.json`:
+
+```bash
+cargo run --release -- run --experiment availability --mock --math-count 90 --math-seed 7
+```
 
 ## 5. The GPT-3 reproductions (E5 / E6)
 

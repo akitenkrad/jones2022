@@ -10,12 +10,12 @@ replications/jones2022/
 ├── pyproject.toml              # uv workspace (members = ["tools"])
 ├── simulation/                 # Rust crate `jones2022-simulation` (bin `jones`)
 │   ├── data/
-│   │   └── humaneval_sample.jsonl  # bundled 8-problem HumanEval subset (offline)
+│   │   └── humaneval_sample.jsonl  # bundled 8-problem HumanEval subset (offline; full set fetched to data/HumanEval.jsonl, git-ignored)
 │   └── src/
 │       ├── main.rs             # clap: run / sweep / reproduce + results writers
 │       ├── lib.rs              # crate root; the socsim-delegation table
 │       ├── config.rs           # Experiment (E1–E7), FRAMING_LINES, ANCHOR_LINES, Config
-│       ├── datasets.rs         # HumanEval loader (bundled subset / full set) + MathEquations
+│       ├── datasets.rs         # HumanEval loader (bundled subset / full set) + MathEquations (curated 8 + seeded generator)
 │       ├── transforms.rs       # semantic-preserving transforms T (IPF / anchor fn / order-flip / conflicting name)
 │       ├── indicators.rs       # failure indicators φ (verbatim copy / anchor line / distractor token)
 │       ├── eval.rs             # run_experiment: transform → query → sandbox → φ → MetricRow (E1–E4)

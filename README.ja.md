@@ -52,7 +52,9 @@ uv run jones-tools visualize results/latest
 uv run jones-tools reproduce-paper results/latest
 ```
 
-HumanEval は小規模な **バンドル 8 問 subset** を同梱しており全経路がオフラインで走る．公式 164 問セットは `--dataset <HumanEval.jsonl>`（または `data/HumanEval.jsonl` を配置）で差し替えられる — 採用したセットとその件数は常にログ出力され，サイレントに切り詰められることはない．
+HumanEval は小規模な **バンドル 8 問 subset** を同梱しており全経路がオフラインで走る．フル 164 問セットは `uv run jones-tools fetch-dataset` で一度取得すれば使える（公式 MIT ライセンスのセットを `data/HumanEval.jsonl` に保存し，`--full` でローダが自動検出する）．任意のコピーは `--dataset <HumanEval.jsonl>` で差し替えられる — 採用したセットとその件数は常にログ出力され，サイレントに切り詰められることはない．フルセットは git 管理外で，追跡されるのは subset のみ．
+
+論文のもう一方のデータセット **MathEquations** は著者独自・非公開のため，再現実装では生成する．curate 済み8問を同梱し，`--math-count N --math-seed S` で決定論的にスケールする（8問は安定 prefix，超過分は演算子優先順位テンプレートから生成し，いずれもデータセットの不変条件を保つ）．詳細は [CLI](docs/cli.ja.md#mathequations--生成セットe3e4) を参照．
 
 各 `run` は `results/{timestamp}/` に `config.json` と `metrics.csv` を，`sweep` は `results/sweep_{timestamp}/` に `sweep_summary.csv` と `sweep_config.json` を，`reproduce` は `paper_anchors.csv` と `reproduce_summary.csv` を書き出す．Python ツールはこれらの隣に PNG を生成する．
 

@@ -169,7 +169,226 @@ fn math(
 /// distractor instead of the spec'd `canonical_solution`. The unit test always
 /// checks the spec'd behaviour, so a biased completion fails it (lowering
 /// accuracy) and the indicator detects `distractor_token` in the output.
+///
+/// This returns the curated 8-problem set. For a larger set (the paper used ~90
+/// per setting) use [`math_equations_n`], which keeps these 8 as a stable prefix
+/// and appends deterministically generated problems.
 pub fn math_equations() -> Vec<Problem> {
+    curated_math_equations()
+}
+
+/// MathEquations scaled to `count` problems, deterministically from `seed`.
+///
+/// The curated [`math_equations`] set is the stable prefix; problems beyond it
+/// are synthesized by [`generate_math_problem`] (operator-precedence templates).
+/// `count <= 8` returns the curated set truncated (the generator is not invoked,
+/// so `seed` is irrelevant there). `count` is clamped to at least 1.
+///
+/// Every generated problem upholds the same invariants as the curated ones: the
+/// `distractor_token` occurs in `distractor_solution` and never in
+/// `canonical_solution`, and the unit test asserts the *canonical* value on
+/// inputs where the canonical and distractor readings disagree (so a biased
+/// completion provably fails).
+pub fn math_equations_n(count: usize, seed: u64) -> Vec<Problem> {
+    let count = count.max(1);
+    let mut problems = curated_math_equations();
+    if count <= problems.len() {
+        problems.truncate(count);
+        return problems;
+    }
+    let mut rng = SplitMix64::new(seed);
+    let mut idx = problems.len();
+    while problems.len() < count {
+        problems.push(generate_math_problem(idx, &mut rng));
+        idx += 1;
+    }
+    problems
+}
+
+/// Deterministic SplitMix64 — avoids an `rand` dependency and mirrors the
+/// in-repo preference for tiny hand-rolled hashing (cf. `mock::exhibits_bias`).
+struct SplitMix64(u64);
+
+impl SplitMix64 {
+    fn new(seed: u64) -> Self {
+        Self(seed)
+    }
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+    /// Uniform integer in `[lo, hi]` (inclusive).
+    fn between(&mut self, lo: i64, hi: i64) -> i64 {
+        let span = (hi - lo + 1) as u64;
+        lo + (self.next_u64() % span) as i64
+    }
+}
+
+const NUM_TEMPLATES: u64 = 5;
+
+/// Single-arg test inputs probed for a discriminating value (canonical ≠ distractor).
+const CAND1: [i64; 8] = [2, 3, 4, 5, 6, 7, 8, 9];
+/// Two-arg test inputs (all with the first arg ≠ 0 and second ≠ 1, so the
+/// templates' discriminating conditions hold for at least three of them).
+const CAND2: [(i64, i64); 8] = [
+    (1, 2),
+    (2, 3),
+    (3, 2),
+    (4, 3),
+    (2, 5),
+    (5, 2),
+    (3, 4),
+    (6, 3),
+];
+
+/// Pick up to 3 single-arg test cases where the two readings disagree.
+fn cases1(disc: impl Fn(i64) -> bool, expected: impl Fn(i64) -> i64) -> Vec<(String, i64)> {
+    CAND1
+        .iter()
+        .copied()
+        .filter(|&n| disc(n))
+        .take(3)
+        .map(|n| (format!("{n}"), expected(n)))
+        .collect()
+}
+
+/// Pick up to 3 two-arg test cases where the two readings disagree.
+fn cases2(
+    disc: impl Fn(i64, i64) -> bool,
+    expected: impl Fn(i64, i64) -> i64,
+) -> Vec<(String, i64)> {
+    CAND2
+        .iter()
+        .copied()
+        .filter(|&(x, y)| disc(x, y))
+        .take(3)
+        .map(|(x, y)| (format!("{x}, {y}"), expected(x, y)))
+        .collect()
+}
+
+/// Assemble a generated MathEquations problem. `dist_expr` doubles as the
+/// `distractor_token` — by construction it lacks `canonical`'s parentheses, so
+/// it can never be a substring of the canonical body.
+fn assemble_math(
+    idx: usize,
+    fname: &str,
+    params: &str,
+    doc: &str,
+    canon_expr: &str,
+    dist_expr: &str,
+    cases: &[(String, i64)],
+) -> Problem {
+    let mut test = String::from("def check(candidate):\n");
+    for (args, expected) in cases {
+        test.push_str(&format!("    assert candidate({args}) == {expected}\n"));
+    }
+    Problem {
+        task_id: format!("Math/{idx}"),
+        prompt: format!("def {fname}({params}):\n    \"\"\"{doc}\"\"\"\n"),
+        canonical_solution: format!("    return {canon_expr}\n"),
+        test,
+        entry_point: fname.to_string(),
+        distractor_solution: Some(format!("    return {dist_expr}\n")),
+        distractor_token: Some(dist_expr.to_string()),
+    }
+}
+
+/// Synthesize one operator-precedence MathEquations problem with a unique
+/// function name `op{idx}`. The template and its constants come from `rng`, so
+/// the same seed reproduces the same problem.
+fn generate_math_problem(idx: usize, rng: &mut SplitMix64) -> Problem {
+    let fname = format!("op{idx}");
+    match rng.next_u64() % NUM_TEMPLATES {
+        // (x + y) * k  vs  x + y * k   (disagree when x ≠ 0)
+        0 => {
+            let k = rng.between(2, 6);
+            let canon = move |x: i64, y: i64| (x + y) * k;
+            let dist = move |x: i64, y: i64| x + y * k;
+            let cases = cases2(move |x, y| canon(x, y) != dist(x, y), canon);
+            assemble_math(
+                idx,
+                &fname,
+                "x, y",
+                &format!("Return the sum of x and y, then multiply the whole sum by {k}."),
+                &format!("(x + y) * {k}"),
+                &format!("x + y * {k}"),
+                &cases,
+            )
+        }
+        // n * 2 + k  vs  n * (2 + k)   (disagree when n ≠ 1)
+        1 => {
+            let k = rng.between(2, 6);
+            let canon = move |n: i64| n * 2 + k;
+            let dist = move |n: i64| n * (2 + k);
+            let cases = cases1(move |n| canon(n) != dist(n), canon);
+            assemble_math(
+                idx,
+                &fname,
+                "n",
+                &format!("Return n doubled, then add {k} to the result."),
+                &format!("n * 2 + {k}"),
+                &format!("n * (2 + {k})"),
+                &cases,
+            )
+        }
+        // (n + k) ** 2  vs  n + k ** 2   (disagree when n ≠ 0)
+        2 => {
+            let k = rng.between(1, 5);
+            let canon = move |n: i64| (n + k) * (n + k);
+            let dist = move |n: i64| n + k * k;
+            let cases = cases1(move |n| canon(n) != dist(n), canon);
+            assemble_math(
+                idx,
+                &fname,
+                "n",
+                &format!("Return the quantity (n plus {k}), squared."),
+                &format!("(n + {k}) ** 2"),
+                &format!("n + {k} ** 2"),
+                &cases,
+            )
+        }
+        // (x - k) * m  vs  x - k * m   (disagree when x ≠ 0)
+        3 => {
+            let k = rng.between(2, 5);
+            let m = rng.between(2, 5);
+            let canon = move |x: i64| (x - k) * m;
+            let dist = move |x: i64| x - k * m;
+            let cases = cases1(move |x| canon(x) != dist(x), canon);
+            assemble_math(
+                idx,
+                &fname,
+                "x",
+                &format!("Return the quantity (x minus {k}), times {m}."),
+                &format!("(x - {k}) * {m}"),
+                &format!("x - {k} * {m}"),
+                &cases,
+            )
+        }
+        // a + k * b  vs  (a + k) * b   (disagree when a ≠ 0 and b ≠ 1)
+        _ => {
+            let k = rng.between(2, 6);
+            let canon = move |a: i64, b: i64| a + k * b;
+            let dist = move |a: i64, b: i64| (a + k) * b;
+            let cases = cases2(move |a, b| canon(a, b) != dist(a, b), canon);
+            assemble_math(
+                idx,
+                &fname,
+                "a, b",
+                &format!("Return a plus {k} times b."),
+                &format!("a + {k} * b"),
+                &format!("(a + {k}) * b"),
+                &cases,
+            )
+        }
+    }
+}
+
+/// The curated, hand-written 8-problem MathEquations set (stable across
+/// releases; the deterministic prefix of [`math_equations_n`]).
+fn curated_math_equations() -> Vec<Problem> {
     vec![
         math(
             "Math/0",
@@ -264,6 +483,71 @@ mod tests {
                 p.task_id
             );
         }
+    }
+
+    #[test]
+    fn generated_math_satisfies_invariants() {
+        let curated_ids: Vec<String> = curated_math_equations()
+            .iter()
+            .map(|p| p.task_id.clone())
+            .collect();
+        for seed in [1u64, 42, 7, 1000] {
+            let problems = math_equations_n(40, seed);
+            assert_eq!(problems.len(), 40);
+            // The curated 8 are the stable prefix.
+            let prefix: Vec<String> = problems[..8].iter().map(|p| p.task_id.clone()).collect();
+            assert_eq!(prefix, curated_ids);
+            // task_ids are unique (mock lookup keys on the prompt; distinct ids
+            // mean distinct fnames mean distinct prompts).
+            let ids: std::collections::HashSet<&String> =
+                problems.iter().map(|p| &p.task_id).collect();
+            assert_eq!(ids.len(), 40, "seed {seed}: task_ids must be unique");
+            for p in &problems {
+                let token = p.distractor_token.as_ref().unwrap();
+                let dist = p.distractor_solution.as_ref().unwrap();
+                assert!(dist.contains(token.as_str()), "{}: token in distractor", p.task_id);
+                assert!(
+                    !p.canonical_solution.contains(token.as_str()),
+                    "{}: token {token:?} must NOT be in the canonical body",
+                    p.task_id
+                );
+                assert!(
+                    p.test.contains("assert candidate"),
+                    "{}: at least one assertion",
+                    p.task_id
+                );
+                assert!(p.prompt.contains(&p.entry_point), "{}: prompt names fn", p.task_id);
+                assert!(p.test.starts_with("def check"), "{}: has check fn", p.task_id);
+            }
+        }
+    }
+
+    #[test]
+    fn generated_math_is_deterministic() {
+        let a = math_equations_n(30, 123);
+        let b = math_equations_n(30, 123);
+        let c = math_equations_n(30, 124);
+        assert_eq!(a.len(), 30);
+        for (x, y) in a.iter().zip(&b) {
+            assert_eq!(x.prompt, y.prompt);
+            assert_eq!(x.test, y.test);
+            assert_eq!(x.canonical_solution, y.canonical_solution);
+            assert_eq!(x.distractor_solution, y.distractor_solution);
+        }
+        // A different seed changes the generated tail (not the curated prefix).
+        assert_ne!(
+            a[8..].iter().map(|p| p.prompt.clone()).collect::<Vec<_>>(),
+            c[8..].iter().map(|p| p.prompt.clone()).collect::<Vec<_>>(),
+            "different seeds should differ somewhere in the generated tail"
+        );
+    }
+
+    #[test]
+    fn math_count_clamps_and_truncates() {
+        assert_eq!(math_equations_n(0, 1).len(), 1); // clamped to >= 1
+        assert_eq!(math_equations_n(3, 1).len(), 3);
+        assert_eq!(math_equations_n(8, 1).len(), 8);
+        assert_eq!(math_equations_n(9, 1).len(), 9);
     }
 
     #[test]

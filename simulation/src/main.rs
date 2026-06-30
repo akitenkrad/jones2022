@@ -27,7 +27,7 @@ use socsim_results::{
 };
 
 use jones2022_simulation::config::{Experiment, DEFAULT_ANCHOR_RATIO, DEFAULT_NUM_PACKAGES};
-use jones2022_simulation::datasets::{load_humaneval, math_equations, Problem};
+use jones2022_simulation::datasets::{load_humaneval, math_equations, math_equations_n, Problem};
 use jones2022_simulation::eval::{run_experiment, MetricRow};
 use jones2022_simulation::filedelete::{run_file_deletion, DEFAULT_TRIALS};
 use jones2022_simulation::gpt3::{anchor_records, run_gpt3_anchoring, run_gpt3_framing};
@@ -90,6 +90,13 @@ struct RunArgs {
     /// Evaluate only the first N code problems (0 = all). For scoped live smokes.
     #[arg(long, default_value_t = 0)]
     limit: usize,
+    /// E3/E4 MathEquations set size. The curated 8 are a stable prefix; extras
+    /// beyond 8 are deterministically generated (precedence templates).
+    #[arg(long, default_value_t = 8)]
+    math_count: usize,
+    /// Seed for generating MathEquations problems past the curated 8 (E3/E4).
+    #[arg(long, default_value_t = 42)]
+    math_seed: u64,
     /// E5 anchor ratio p (upper = a(1+p), lower = a(1-p)).
     #[arg(long, default_value_t = DEFAULT_ANCHOR_RATIO)]
     anchor_ratio: f64,
@@ -195,13 +202,18 @@ fn cmd_run(args: RunArgs) -> Result<()> {
             (rows, problems.len(), humaneval_desc(&args))
         }
         Experiment::Availability | Experiment::AttributeSubstitution => {
-            let mut problems = math_equations();
+            let mut problems = math_equations_n(args.math_count, args.math_seed);
             if args.limit > 0 && problems.len() > args.limit {
                 problems.truncate(args.limit);
             }
             let client = code_client(&args, &problems)?;
             let rows = run_experiment(client.as_ref(), args.experiment, &problems, args.seed);
-            (rows, problems.len(), "math_equations".to_string())
+            let desc = if problems.len() > 8 {
+                format!("math_equations(n={}, seed={})", problems.len(), args.math_seed)
+            } else {
+                "math_equations".to_string()
+            };
+            (rows, problems.len(), desc)
         }
         Experiment::Gpt3Anchoring => {
             let client = simple_client(args.mock, build_gpt3_anchoring_mock, &args)?;

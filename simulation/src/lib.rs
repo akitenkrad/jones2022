@@ -35,7 +35,7 @@ pub mod transforms;
 
 pub use anchors::PAPER_ANCHORS;
 pub use config::{Config, Experiment};
-pub use datasets::{load_humaneval, load_problems, math_equations, Problem};
+pub use datasets::{load_humaneval, load_problems, math_equations, math_equations_n, Problem};
 pub use eval::{run_experiment, MetricRow};
 pub use filedelete::run_file_deletion;
 pub use gpt3::{run_gpt3_anchoring, run_gpt3_framing};

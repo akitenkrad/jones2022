@@ -14,6 +14,11 @@ dist/
 # Simulation outputs
 results/
 
+# Full official HumanEval set (164 problems) fetched by `jones-tools fetch-dataset`.
+# The repo deliberately ships only the curated 8-problem subset; the full set is a
+# local artifact (MIT, openai/human-eval). The 8-problem subset stays tracked.
+simulation/data/HumanEval.jsonl
+
 # Claude Code local settings and notes
 .claude/
 

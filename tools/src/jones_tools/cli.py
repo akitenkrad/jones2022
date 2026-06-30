@@ -33,6 +33,10 @@ _COMMANDS = {
         "jones_tools.reproduce_paper",
         "論文アンカー一括再現図 (PAPER_ANCHORS 照合・PASS/off)",
     ),
+    "fetch-dataset": (
+        "jones_tools.fetch_dataset",
+        "公式 HumanEval (MIT) を取得し simulation/data/HumanEval.jsonl に保存",
+    ),
 }
 
 

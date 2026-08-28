@@ -8,7 +8,7 @@
 replications/jones2022/
 ├── Cargo.toml                  # Rust workspace (members = ["simulation"])
 ├── pyproject.toml              # uv workspace (members = ["tools"])
-├── simulation/                 # Rust crate `jones2022-simulation` (bin `jones`)
+├── simulation/                 # Rust crate `jones-simulation` (bin `jones`)
 │   ├── data/
 │   │   └── humaneval_sample.jsonl  # bundled 8-problem HumanEval subset (offline; full set fetched to data/HumanEval.jsonl, git-ignored)
 │   └── src/
@@ -34,7 +34,7 @@ replications/jones2022/
 └── docs/                       # bilingual (.md + .ja.md)
 ```
 
-Two projects in one tree: a **Cargo workspace** (`simulation`, crate `jones2022-simulation`, binary `jones`) and a **uv workspace** (`tools`, package `jones-tools`). The Rust side runs the probe pipeline and writes metrics; the Python side is visualization.
+Two projects in one tree: a **Cargo workspace** (`simulation`, crate `jones-simulation`, binary `jones`) and a **uv workspace** (`tools`, package `jones-tools`). The Rust side runs the probe pipeline and writes metrics; the Python side is visualization.
 
 ## Built on socsim: what is delegated
 

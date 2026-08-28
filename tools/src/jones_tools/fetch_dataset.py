@@ -147,7 +147,7 @@ def fetch(url: str, output: Path, *, force: bool) -> int:
 
     _atomic_write(output, text)
     print(f"saved: {output} ({len(problems)} 問)")
-    print("次のように使えます: cargo run -p jones2022-simulation -- run --experiment framing --full")
+    print("次のように使えます: cargo run -p jones-simulation -- run --experiment framing --full")
     return 0
 
 

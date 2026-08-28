@@ -59,7 +59,7 @@ cargo run --release -- run --experiment file-deletion --model codellama --num-pa
 HumanEval と違い，論文の MathEquations は著者独自・非公開のため，再現実装では**プログラム生成**する．`--math-count`/`--math-seed` で決定論的にスケールでき，curate 済み8問が安定 prefix，超過分は演算子優先順位テンプレート（例: `(x + y) * k` と素朴な誤読 `x + y * k`）から生成する．生成問題もデータセットの不変条件を保つ — `distractor_token` は誤答本体にのみ現れ，単体テストは **2 つの解釈が食い違う入力で canonical 値**を assert するので，バイアス補完は必ずテストに落ちる．実際の `n` とシードは `config.json`（`dataset: "math_equations(n=…, seed=…)"`）に記録される．`--math-count 8`（既定）は元の curate 済みセットをそのまま再現する．
 
 ```bash
-cargo run -p jones2022-simulation -- run --experiment availability --math-count 90 --math-seed 7
+cargo run -p jones-simulation -- run --experiment availability --math-count 90 --math-seed 7
 ```
 
 ### `sweep` — パラメータ掃引
@@ -131,7 +131,7 @@ uv run jones-tools fetch-dataset                            # 公式 HumanEval 1
 
 ```bash
 uv run jones-tools fetch-dataset            # → simulation/data/HumanEval.jsonl（164 問）
-cargo run -p jones2022-simulation -- run --experiment framing --full
+cargo run -p jones-simulation -- run --experiment framing --full
 ```
 
 | フラグ | 既定 | 意味 |

@@ -59,7 +59,7 @@ Outputs (under `results/{stamp}/`): `config.json` and `metrics.csv` (long: `expe
 Unlike HumanEval, the paper's MathEquations set is the authors' own and is not public, so the replication **synthesizes** it. `--math-count`/`--math-seed` scale it deterministically: the curated 8 problems are a stable prefix, and any extras are generated from operator-precedence templates (e.g. `(x + y) * k` vs the naïve `x + y * k`). Each generated problem keeps the dataset's invariants — its `distractor_token` occurs only in the wrong body, and its unit test asserts the *canonical* value on inputs where the two readings disagree, so a biased completion provably fails. The exact `n` and seed are recorded in `config.json` (`dataset: "math_equations(n=…, seed=…)"`). `--math-count 8` (the default) reproduces the original curated set unchanged.
 
 ```bash
-cargo run -p jones2022-simulation -- run --experiment availability --math-count 90 --math-seed 7
+cargo run -p jones-simulation -- run --experiment availability --math-count 90 --math-seed 7
 ```
 
 ### `sweep` — vary a parameter
@@ -131,7 +131,7 @@ The repo ships only a curated 8-problem HumanEval subset so everything runs offl
 
 ```bash
 uv run jones-tools fetch-dataset            # → simulation/data/HumanEval.jsonl (164 problems)
-cargo run -p jones2022-simulation -- run --experiment framing --full
+cargo run -p jones-simulation -- run --experiment framing --full
 ```
 
 | Flag | Default | Meaning |

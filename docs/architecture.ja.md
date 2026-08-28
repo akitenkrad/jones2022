@@ -8,7 +8,7 @@
 replications/jones2022/
 ├── Cargo.toml                  # Rust workspace (members = ["simulation"])
 ├── pyproject.toml              # uv workspace (members = ["tools"])
-├── simulation/                 # Rust crate `jones2022-simulation` (bin `jones`)
+├── simulation/                 # Rust crate `jones-simulation` (bin `jones`)
 │   ├── data/
 │   │   └── humaneval_sample.jsonl  # バンドル 8 問 HumanEval subset（オフライン用；フルセットは data/HumanEval.jsonl に取得・git 管理外）
 │   └── src/
@@ -34,7 +34,7 @@ replications/jones2022/
 └── docs/                       # バイリンガル（.md + .ja.md）
 ```
 
-1 つのツリーに 2 プロジェクト: **Cargo workspace**（`simulation`，crate `jones2022-simulation`，バイナリ `jones`）と **uv workspace**（`tools`，package `jones-tools`）．Rust 側がプローブパイプラインを実行して指標を書き出し，Python 側が可視化を担う．
+1 つのツリーに 2 プロジェクト: **Cargo workspace**（`simulation`，crate `jones-simulation`，バイナリ `jones`）と **uv workspace**（`tools`，package `jones-tools`）．Rust 側がプローブパイプラインを実行して指標を書き出し，Python 側が可視化を担う．
 
 ## socsim 基盤への委譲
 

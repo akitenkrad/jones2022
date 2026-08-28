@@ -467,6 +467,21 @@ fn cmd_reproduce(args: ReproduceArgs) -> Result<()> {
     let passes = rows.iter().filter(|r| r.status == "PASS").count();
     let offs = rows.iter().filter(|r| r.status == "off").count();
     let nodata = rows.iter().filter(|r| r.status == "NO_DATA").count();
+
+    // Machine-readable record of the run. The two CSVs say what came out; without
+    // this they never say what went in, so a results dir cannot be replayed.
+    let record = serde_json::json!({
+        "subcommand": "reproduce",
+        "results_root": args.results.display().to_string(),
+        "mock": args.mock,
+        "observed": observed,
+        "anchors": rows.len(),
+        "pass": passes,
+        "off": offs,
+        "no_data": nodata,
+    });
+    write_json(&record, run_dir.join("config.json")).context("writing config.json")?;
+
     println!(
         "reproduce ({}): {} anchors → {passes} PASS / {offs} off / {nodata} NO_DATA → {}",
         if args.mock { "mock" } else { "from latest" },

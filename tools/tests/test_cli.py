@@ -31,7 +31,20 @@ def test_cli_help_lists_subcommands(capsys):
     assert "reproduce-paper" in out
 
 
-def test_show_experiment_settings_reads_config(tmp_path, capsys):
+def test_show_experiment_settings_reads_a_run(make_run, capsys):
+    from conftest import FRAMING_ROWS
+
+    d = make_run("framing", FRAMING_ROWS, {"mock": True, "seed": 42})
+    show_experiment_settings.main(["--results-dir", d])
+    out = capsys.readouterr().out
+    assert "framing" in out
+    assert "experiment" in out
+    # どの run を見ているかが分かること．
+    assert "run_uid" in out
+    assert "config_hash" in out
+
+
+def test_show_experiment_settings_reads_a_legacy_config(tmp_path, capsys):
     cfg = {"experiment": "framing", "model": "mock", "mock": True, "seed": 42}
     (tmp_path / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
     show_experiment_settings.main(["--results-dir", str(tmp_path)])

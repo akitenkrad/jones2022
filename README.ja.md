@@ -4,7 +4,7 @@
 
 Jones & Steinhardt (2022)「Capturing Failures of Large Language Models via Human Cognitive Biases」（[arXiv:2202.12299](https://arxiv.org/abs/2202.12299)）の再現実装．本論文は **人間の認知バイアス** を，LLM の質的失敗を系統的に誘発するレシピへと転用する: 失敗様式を仮説化し，それを誘発する **意味保存変換** を構成して，(a) 変換が機能的正解率を下げるか（感度 `Δ`），(b) 出力が標的失敗特徴を含むか（指標率 `r`）の 2 点を測る．変換は完全に **ブラックボックスかつ logprob 非依存** — モデルのテキスト出力のみを読み，先頭トークン確率を一切見ない — ため任意のモデルで成立する．原論文は Codex を用いたが，そのモデル（`davinci-001`）は廃止済みのため，本再現では現代のコードモデル（Ollama `codellama` / `qwen2.5-coder` / `deepseek-coder` / `starcoder2`，OpenAI `gpt-4o-mini` フォールバック）で代替し，**失敗の方向の保存** を再現目標とする．
 
-本リポジトリは集約済み **socsim** ライブラリ上に薄く実装する．LLM 生成は `socsim-llm`，平均・率の集計は `socsim-metrics`，論文アンカー PASS/off 照合は `socsim-reproduce`，結果 I/O は `socsim-results` に委譲する．jones2022 固有は «意味保存変換・失敗指標 `φ`・コード実行／削除サンドボックス»（Rust `simulation/`）と Python 分析ツール（`tools/`）のみ．**プローブ + 指標パイプライン** であり ABM の tick loop ではないため，`socsim-core`/engine/grid/net は引かない．
+本リポジトリは集約済み **socsim** ライブラリ上に薄く実装する．LLM 生成は `socsim-llm`，平均・率の集計は `socsim-metrics`，論文アンカー PASS/off 照合は `socsim-reproduce`，実行の記録 — ディレクトリ・その名前・`config.json`・指標・イベント・論文の報告値 — は [`runvault`](https://github.com/akitenkrad/rs-runvault) に委譲する．jones2022 固有は «意味保存変換・失敗指標 `φ`・コード実行／削除サンドボックス»（Rust `simulation/`）と Python 分析ツール（`tools/`）のみ．**プローブ + 指標パイプライン** であり ABM の tick loop ではないため，`socsim-core`/engine/grid/net は引かない．
 
 ## スコープ
 
@@ -48,15 +48,15 @@ cargo run --release -- reproduce --mock
 
 # === Python ツール ===
 uv sync
-uv run jones-tools visualize results/latest
-uv run jones-tools reproduce-paper results/latest
+uv run jones-tools visualize
+uv run jones-tools reproduce-paper
 ```
 
 HumanEval は小規模な **バンドル 8 問 subset** を同梱しており全経路がオフラインで走る．フル 164 問セットは `uv run jones-tools fetch-dataset` で一度取得すれば使える（公式 MIT ライセンスのセットを `data/HumanEval.jsonl` に保存し，`--full` でローダが自動検出する）．任意のコピーは `--dataset <HumanEval.jsonl>` で差し替えられる — 採用したセットとその件数は常にログ出力され，サイレントに切り詰められることはない．フルセットは git 管理外で，追跡されるのは subset のみ．
 
 論文のもう一方のデータセット **MathEquations** は著者独自・非公開のため，再現実装では生成する．curate 済み8問を同梱し，`--math-count N --math-seed S` で決定論的にスケールする（8問は安定 prefix，超過分は演算子優先順位テンプレートから生成し，いずれもデータセットの不変条件を保つ）．詳細は [CLI](docs/cli.ja.md#mathequations--生成セットe3e4) を参照．
 
-各 `run` は `results/{timestamp}/` に `config.json` と `metrics.csv` を，`sweep` は `results/sweep_{timestamp}/` に `sweep_summary.csv` と `sweep_config.json` を，`reproduce` は `paper_anchors.csv` と `reproduce_summary.csv` を書き出す．Python ツールはこれらの隣に PNG を生成する．
+どのサブコマンドも実行を 1 つの runvault run として `results/jones/{run_slug}/` に記録する．`run` は条件ごとの観測を `events.jsonl` に，run 全体の集約を `metrics.csv` に書く．`sweep` は親 run で，条件ごとに子 run ができる．`reproduce` は論文の値を `reference.csv` に，観測値を `metrics.csv` に，判定表を `artifacts/` に置く．Python ツールは run の外の `results/jones/figures/{run_slug}/` に PNG を生成する．
 
 > **再現の正直性**: `--mock` は «配管» を検証するためのもの — 各バイアスを項目の固定割合で発現する決定論的スクリプトスタブ（論文値には未調整）であり，アンカーを本当に «PASS» することはない．論文の参照値との真の一致はライブモデルでのみ得られる．
 
@@ -70,7 +70,7 @@ HumanEval は小規模な **バンドル 8 問 subset** を同梱しており全
 
 ## 依存
 
-- **Rust**: `clap`（CLI），`serde` + `serde_json`（設定），`anyhow`（エラー），および socsim crate — `socsim-llm`（logprob 非依存生成．Ollama→OpenAI ライブフォールバック + プロンプトキャッシュ．mock 用 `ScriptedClient`），`socsim-metrics`（`stats::mean`），`socsim-reproduce`（論文アンカーハーネス），`socsim-results`（タイムスタンプ結果 + CSV/JSON 書き出し）．socsim のコミットは `Cargo.lock` で固定．機能的正解率の採点はサンドボックス単体テストのため Python インタプリタを呼び出す．ライブ生成にはローカル Ollama が必要．
+- **Rust**: `clap`（CLI），`serde` + `serde_json`（設定），`anyhow`（エラー），および socsim crate — `socsim-llm`（logprob 非依存生成．Ollama→OpenAI ライブフォールバック + プロンプトキャッシュ．mock 用 `ScriptedClient`），`socsim-metrics`（`stats::mean`），`socsim-reproduce`（論文アンカーハーネス），および `runvault`（実行の記録）．socsim のコミットは `Cargo.lock` で固定．機能的正解率の採点はサンドボックス単体テストのため Python インタプリタを呼び出す．ライブ生成にはローカル Ollama が必要．
 - **Python**（`uv`）: `matplotlib`，`numpy`，`pandas`．
 
 ## ライセンス

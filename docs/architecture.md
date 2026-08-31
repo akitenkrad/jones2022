@@ -45,9 +45,9 @@ jones2022 is a thin layer over the consolidated **socsim** library. It is a **pr
 | LLM generation (logprob-free `complete`) | `socsim-llm` | `eval.rs`, `gpt3.rs`, `filedelete.rs`, `main.rs` |
 | Mean / rate aggregation | `socsim-metrics::stats` | `eval.rs`, `main.rs` |
 | Paper-anchor PASS/off reproduction harness | `socsim-reproduce` | `anchors.rs`, `main.rs` |
-| Timestamped results dir + CSV/JSON writers | `socsim-results` | `main.rs` |
+| Run directory, naming, `config.json`, metrics / events / references | `runvault` | `record.rs`, `main.rs` |
 
-The socsim crates are pulled as git dependencies pinned via `Cargo.lock`. `socsim-llm` is taken with the `live` feature so the live Ollama→OpenAI fallback client is available alongside the `ScriptedClient` mock.
+The socsim crates and `runvault` are pulled as git dependencies pinned via `Cargo.lock`. `socsim-llm` is taken with the `live` feature so the live Ollama→OpenAI fallback client is available alongside the `ScriptedClient` mock.
 
 ## Two-layer determinism
 
@@ -86,7 +86,7 @@ The **deletion guard** (E7) makes erroneous-deletion measurement safe: a Python 
 
 ## Reproduction harness — `anchors.rs`
 
-`PAPER_ANCHORS` holds the paper's quantitative reference values (the verbatim-copy and accuracy-drop figures for E1, the anchor-line rates for E2, the order-flip and named-function figures for E3/E4, the GPT-3 update / risky-choice rates for E5/E6, and the file-deletion rate for E7), fed to `socsim_reproduce::build_rows` alongside an observation lookup. The harness mechanics — PASS/off/NO_DATA classification and the CSV writers — live in `socsim-reproduce`; only the values are jones2022's. `reproduce` either reads the latest run's `metrics.csv` (per-experiment) or, with `--mock`, runs every experiment offline to source every anchor.
+`PAPER_ANCHORS` holds the paper's quantitative reference values (the verbatim-copy and accuracy-drop figures for E1, the anchor-line rates for E2, the order-flip and named-function figures for E3/E4, the GPT-3 update / risky-choice rates for E5/E6, and the file-deletion rate for E7), fed to `socsim_reproduce::build_rows` alongside an observation lookup. The harness mechanics — PASS/off/NO_DATA classification and the CSV writers — live in `socsim-reproduce`; only the values are jones2022's. `reproduce` either observes the most recent finished `run` run (per-experiment, recorded as `lineage.derived_from`) or, with `--mock`, runs every experiment offline to source every anchor. The paper's values land in the run's `reference.csv` and the observations in its `metrics.csv`, keyed on the same metric names.
 
 ## Injection and testing
 

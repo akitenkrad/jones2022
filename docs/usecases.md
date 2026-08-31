@@ -23,10 +23,10 @@ Run one experiment against a real code model and read the sensitivity and indica
 
 ```bash
 cargo run --release -- run --experiment framing --model codellama --seed 42
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
-`metrics.csv` carries the `baseline` accuracy and, per framing line, the transformed accuracy, the sensitivity `Δ`, and the verbatim-copy rate `r`. `visualize` writes `fig_accuracy.png` and `fig_indicator.png`. The paper's framing effect is a 22.3–30.5 pt accuracy drop with a verbatim-copy rate up to 81%; a robust modern model may resist most framing lines while still showing the effect on a spec-conflicting line such as `return False`.
+The run's `events.jsonl` carries the `baseline` accuracy and, per framing line, the transformed accuracy, the sensitivity `Δ`, and the verbatim-copy rate `r`. `visualize` writes `fig_accuracy.png` and `fig_indicator.png`. The paper's framing effect is a 22.3–30.5 pt accuracy drop with a verbatim-copy rate up to 81%; a robust modern model may resist most framing lines while still showing the effect on a spec-conflicting line such as `return False`.
 
 ## 3. Scoped live smoke (a couple of problems)
 
@@ -52,12 +52,12 @@ The MathEquations experiments need no external data — the set is synthesized i
 ```bash
 cargo run --release -- run --experiment availability --mock
 cargo run --release -- run --experiment attribute-substitution --mock
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
 Each writes a `baseline` row and one `transform` row whose `Δ` is the accuracy drop and whose `r` is the rate at which the output is the distractor (unary-first solution for E3, named operation for E4).
 
-The set ships as a curated 8 problems and scales deterministically toward the paper's ~90-per-setting size with `--math-count N --math-seed S` (the 8 stay a stable prefix; extras are generated from operator-precedence templates). The exact `n` and seed are recorded in `config.json`:
+The set ships as a curated 8 problems and scales deterministically toward the paper's ~90-per-setting size with `--math-count N --math-seed S` (the 8 stay a stable prefix; extras are generated from operator-precedence templates). The set size and seed are recorded in `config.json`:
 
 ```bash
 cargo run --release -- run --experiment availability --mock --math-count 90 --math-seed 7
@@ -70,7 +70,7 @@ The numeric / choice experiments need no code execution:
 ```bash
 cargo run --release -- run --experiment gpt3-anchoring --mock --anchor-ratio 0.5
 cargo run --release -- run --experiment gpt3-framing   --mock --respondents 20
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
 E5 reports the toward-anchor update rate (high / low) and the gibberish rate; E6 reports the risky-choice rate per frame, where the die (loss) frame should be riskier than the save (gain) frame.
@@ -81,16 +81,16 @@ Sweep the package count to find the deletion threshold (the paper's Fig 6: delet
 
 ```bash
 cargo run --release -- sweep --experiment file-deletion --mock --num-packages-values 1,2,3,4,5,6
-uv run jones-tools visualize-sweep results/sweep_<stamp>
+uv run jones-tools visualize-sweep
 ```
 
-The generated "uninstall" scripts run under the deletion guard, so nothing is ever actually deleted; `sweep_summary.csv` has the protected-file deletion rate per package count, and `visualize-sweep` plots it.
+The generated "uninstall" scripts run under the deletion guard, so nothing is ever actually deleted; each package count is a child run whose `events.jsonl` has the protected-file deletion rate, and `visualize-sweep` stacks them into the Fig 6 view.
 
 ## 7. Anchor-ratio sweep (E5)
 
 ```bash
 cargo run --release -- sweep --experiment gpt3-anchoring --mock --anchor-ratio-values 0.1,0.2,0.5,0.8
-uv run jones-tools visualize-sweep results/sweep_<stamp>
+uv run jones-tools visualize-sweep
 ```
 
 `visualize-sweep` plots the toward-anchor update rate (and gibberish rate) against the anchor ratio `p` — the paper's anchoring effect strengthens as `p` grows.
@@ -105,12 +105,12 @@ for m in codellama qwen2.5-coder deepseek-coder starcoder2; do
 done
 ```
 
-Each model writes its own results tree; compare the `Δ` and `r` columns of their `metrics.csv`. The paper's claim is that the failure direction survives across model generations even as the magnitude varies with model size and instruction tuning.
+Each model writes its own results tree; compare the `Δ` and `r` fields of their `events.jsonl`. The paper's claim is that the failure direction survives across model generations even as the magnitude varies with model size and instruction tuning.
 
 ## 9. Inspect a run
 
 ```bash
-uv run jones-tools show-experiment-settings results/latest
+uv run jones-tools show-experiment-settings
 ```
 
-Pretty-prints the run's `config.json` (experiment, model, seed, dataset, per-experiment parameters), resolving the `results/latest` symlink.
+Prints the run's identity from `run.json` and the conditions from `config.json`'s `parameters`.

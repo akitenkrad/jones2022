@@ -1,8 +1,7 @@
 """run 結果の可視化: 実験種別を自動判定し，論文 Table/Fig 風の図を出力する．
 
-`results/<dir>/metrics.csv`（long:
-experiment,variant,condition,n,functional_accuracy,indicator_rate,delta）を読み，
-`config.json` の `experiment` で種別を判定して以下を生成する．
+条件ごとの観測（baseline と各変種）は run の `events.jsonl` から読む．実験種別は
+`config.json` の `parameters.experiment` で判定して以下を生成する．
 
 - コード実験 (E1–E4): `fig_accuracy.png`（baseline vs 変種別の機能的正解率，E1≈Table 1 /
   E4≈Table 2）と `fig_indicator.png`（失敗指標率 r と感度 Δ の 2 パネル）．
@@ -10,32 +9,26 @@ experiment,variant,condition,n,functional_accuracy,indicator_rate,delta）を読
 - E6 gpt3-framing: `fig_indicator.png`（save vs die のリスク選択率，≈Table 9）．
 - E7 file-deletion: `fig_indicator.png`（誤削除率）．
 
+図は run の外（`<results>/jones/figures/<run_slug>/`）に書く．run が終わった後に
+作るものは，その run の manifest に載らないので中には置かない．
+
+--results-dir を省略すると
+`runvault path --experiment jones --latest --subcommand run --standalone`
+が返す run ディレクトリを対象にする（`runvault` が PATH にある必要がある）．
+
 Usage:
-    jones-tools visualize [--results-dir RESULTS_DIR]
+    jones-tools visualize [--results-dir RESULTS_DIR] [--results-root ROOT]
 """
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
+
+from jones_tools.run_io import conditions_table, experiment_and_model, latest_run, output_dir
 
 _INDICATOR_COLOR = "#d62728"
 _BASELINE_COLOR = "#4c78a8"
 _TRANSFORM_COLOR = "#ff7f0e"
-
-
-def _load(results_dir: Path):
-    import pandas as pd
-
-    df = pd.read_csv(results_dir / "metrics.csv")
-    experiment = str(df["experiment"].iloc[0]) if not df.empty else "?"
-    model = "?"
-    config_path = results_dir / "config.json"
-    if config_path.exists():
-        cfg = json.loads(config_path.read_text(encoding="utf-8"))
-        experiment = cfg.get("experiment", experiment)
-        model = cfg.get("model", "?")
-    return df, experiment, model
 
 
 def _plot_accuracy(df, experiment: str, model: str, out: Path) -> None:
@@ -103,25 +96,34 @@ def main(argv: list[str] | None = None) -> int:
         "results_dir_pos",
         nargs="?",
         default=None,
-        help="可視化対象の結果ディレクトリ (位置引数; --results-dir と同義)",
+        help="可視化対象の run ディレクトリ (位置引数; --results-dir と同義)",
     )
     parser.add_argument(
         "--results-dir",
-        default="results/latest",
-        help="可視化対象の結果ディレクトリ (default: results/latest)",
+        default=None,
+        help="可視化対象の run ディレクトリ (省略時は runvault path が返す直近の run)",
+    )
+    parser.add_argument(
+        "--results-root",
+        default="results",
+        help="run を探す結果ルート (--results-dir 省略時に使う; default: results)",
     )
     args = parser.parse_args(argv)
 
-    results_dir = Path(args.results_dir_pos or args.results_dir)
-    if not (results_dir / "metrics.csv").exists():
-        print(f"metrics.csv not found in {results_dir}; run `jones run` first.")
+    results_dir = args.results_dir_pos or args.results_dir or latest_run(args.results_root)
+    try:
+        df = conditions_table(results_dir)
+    except (FileNotFoundError, SystemExit) as e:
+        print(f"{e}\n  `jones run` を先に実行すること．")
         return 1
 
     import matplotlib
 
     matplotlib.use("Agg")
 
-    df, experiment, model = _load(results_dir)
+    experiment, model = experiment_and_model(results_dir)
+    if experiment == "?" and not df.empty:
+        experiment = str(df["experiment"].iloc[0])
     transform = df[df["condition"] == "transform"]
     if transform.empty:
         print("no transform rows to plot.")
@@ -130,12 +132,13 @@ def main(argv: list[str] | None = None) -> int:
     # コード実験 (E1–E4) は機能的正解率が非 NaN → 正解率図も描く．
     has_accuracy = bool(df["functional_accuracy"].notna().any())
 
+    out_dir = Path(output_dir(results_dir))
     written = []
     if has_accuracy:
-        out = results_dir / "fig_accuracy.png"
+        out = out_dir / "fig_accuracy.png"
         _plot_accuracy(df, experiment, model, out)
         written.append(out)
-    out = results_dir / "fig_indicator.png"
+    out = out_dir / "fig_indicator.png"
     _plot_indicator(df, experiment, model, out, with_delta=has_accuracy)
     written.append(out)
 

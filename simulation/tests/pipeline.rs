@@ -5,11 +5,7 @@
 //! assertions are guarded on a Python interpreter being present so the suite
 //! still passes in a Python-less CI (the indicator path needs no Python).
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use socsim_reproduce::build_rows;
-use socsim_results::write_csv;
 
 use jones2022_simulation::config::Experiment;
 use jones2022_simulation::{
@@ -17,12 +13,6 @@ use jones2022_simulation::{
     build_mock_client, load_problems, math_equations, run_experiment, run_file_deletion,
     run_gpt3_anchoring, run_gpt3_framing, PAPER_ANCHORS,
 };
-
-fn unique_dir(tag: &str) -> PathBuf {
-    static N: AtomicU64 = AtomicU64::new(0);
-    let n = N.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("jones2022-test-{tag}-{}-{n}", std::process::id()))
-}
 
 #[test]
 fn framing_mock_pipeline_produces_metrics_and_fires_indicator() {
@@ -62,15 +52,10 @@ fn framing_mock_pipeline_produces_metrics_and_fires_indicator() {
         }
     }
 
-    // The metrics CSV is actually written.
-    let dir = unique_dir("framing");
-    std::fs::create_dir_all(&dir).unwrap();
-    let csv = dir.join("metrics.csv");
-    write_csv(&rows, &csv).unwrap();
-    let text = std::fs::read_to_string(&csv).unwrap();
-    assert!(text.lines().count() >= 7, "header + 6 rows");
-    assert!(text.contains("raise_notimplemented"));
-    let _ = std::fs::remove_dir_all(&dir);
+    // The five framing lines each get their own row, named after the line.
+    assert!(transforms
+        .iter()
+        .any(|r| r.variant == "raise_notimplemented"));
 }
 
 #[test]

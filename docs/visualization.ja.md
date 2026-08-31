@@ -2,15 +2,15 @@
 
 # 可視化（Python `jones-tools`）
 
-ワークスペースルートで `uv sync` し，`uv run jones-tools <subcommand>` で起動する．図はヘッドレス（Agg）バックエンドを用いるため，ディスプレイ無しのサンドボックス／CI でも描画される．CLI のディスパッチ先: `visualize`・`visualize-sweep`・`show-experiment-settings`・`reproduce-paper`．各々，結果ディレクトリを位置引数またはフラグで取る（既定 `results/latest`）．
+ワークスペースルートで `uv sync` し，`uv run jones-tools <subcommand>` で起動する．図はヘッドレス（Agg）バックエンドを用いるため，ディスプレイ無しのサンドボックス／CI でも描画される．CLI のディスパッチ先: `visualize`・`visualize-sweep`・`show-experiment-settings`・`reproduce-paper`．各々，run ディレクトリを位置引数またはフラグで取る．省略すると `runvault path --latest` が返す run を対象にする（`runvault` が PATH にあるか，`RUNVAULT=<バイナリのパス>` が必要）．図は run の **外**，`results/jones/figures/{run_slug}/` に書く — run の終了後に作るものはその記録の一部ではない．
 
 ## `visualize` — 単一 run の図
 
 ```bash
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize                 # または run ディレクトリ / --results-dir DIR
 ```
 
-run の `metrics.csv` と `config.json` を読み，実験種別を自動判定して，run ディレクトリに図を書き出す:
+run の `events.jsonl`（`x.jones2022.condition` 行）と `config.json` を読み，実験種別を自動判定して以下を書き出す:
 
 - **`fig_accuracy.png`**（コード実験 E1–E4 のみ）— 機能的正解率の棒グラフ: `baseline` バー（青）と変種ごとのバー（橙）を並べる．E1 では Table 1 のビュー（framing 行別の正解率低下），E4 では Table 2 のビュー．
 - **`fig_indicator.png`**（全実験）— 変種別の失敗指標率 `r`，およびコード実験では感度 `Δ` の第 2 パネル．E5 では変種は高 / 低アンカー更新率と gibberish 率，E6 では save vs die フレームのリスク選択率（Table 9 のビュー），E7 ではファイル削除率．
@@ -20,15 +20,15 @@ run の `metrics.csv` と `config.json` を読み，実験種別を自動判定�
 ## `visualize-sweep` — sweep の図
 
 ```bash
-uv run jones-tools visualize-sweep results/sweep_20260101_120000
+uv run jones-tools visualize-sweep           # または sweep 親 / --sweep-dir DIR
 ```
 
-sweep の `sweep_summary.csv` と `sweep_config.json` を読み，`fig_sweep.png` を書き出す: 掃引パラメータ（x 軸）に対する指標率 `r` を変種ごとに折れ線で描き，コード sweep では `Δ` の第 2 パネルを添える．E7 パッケージ数掃引では Fig 6 のビュー（パッケージ数とともに削除率が上昇），E5 アンカー比率掃引では `p` とともにアンカリング効果が強まる様子を示す．パラメータ値ごとの平均 `r` も表示する．
+runvault は掃引の表をディスクに持たないので組み直す．親の `parameters.param` が掃引したキーの名前で，各子の `parameters[param]` がその値なので，子の条件行に値の列を付けて積む．`fig_sweep.png` を書き出す: 掃引パラメータ（x 軸）に対する指標率 `r` を変種ごとに折れ線で描き，コード sweep では `Δ` の第 2 パネルを添える．E7 パッケージ数掃引では Fig 6 のビュー（パッケージ数とともに削除率が上昇），E5 アンカー比率掃引では `p` とともにアンカリング効果が強まる様子を示す．パラメータ値ごとの平均 `r` も表示する．
 
 ## `reproduce-paper` — アンカー表からの図
 
 ```bash
-uv run jones-tools reproduce-paper results/latest [--summary-csv PATH] [--output-dir DIR]
+uv run jones-tools reproduce-paper           # または reproduce run / --summary-csv PATH / --output-dir DIR
 ```
 
 `jones reproduce` が書く `reproduce_summary.csv` を読み，`reproduce_paper.png` を描く: アンカー別に論文値と観測値を並べた棒グラフで，バーは `status` で色分け（PASS = 緑，off = 橙，NO_DATA = 灰，«no data» マーカーで観測バー無し）し，各論文値の周りに許容帯を描く．`PASS / off / NO_DATA` の集計を表示する．観測の無いアンカーは論文値と «no data» マーカーのみを描く．
@@ -36,14 +36,14 @@ uv run jones-tools reproduce-paper results/latest [--summary-csv PATH] [--output
 ## `show-experiment-settings` — run の確認
 
 ```bash
-uv run jones-tools show-experiment-settings results/latest
+uv run jones-tools show-experiment-settings  # または run ディレクトリ / --results-dir DIR
 ```
 
-run の `config.json`（実験・モデル・seed・データセット・実験別パラメータ）を整形表示し，`results/latest` シンボリックリンクを解決する．
+`run.json` が持つ同一性（`run_uid`・サブコマンド・domain・2 つのハッシュ）と，`config.json` の `parameters`（実行条件）を整形表示する．
 
 ## 図の読み方（定性的）
 
-図は `metrics.csv` / `sweep_summary.csv` / `reproduce_summary.csv` の数値の定性的ビューである．着目点:
+図は `events.jsonl` / sweep の子 run 群 / `reproduce_summary.csv` の数値の定性的ビューである．着目点:
 
 | 図 | 着目点 | 実験 |
 |---|---|---|

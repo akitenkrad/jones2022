@@ -45,9 +45,9 @@ jones2022 は集約済み **socsim** ライブラリ上の薄い層である．*
 | LLM 生成（logprob 非依存 `complete`） | `socsim-llm` | `eval.rs`，`gpt3.rs`，`filedelete.rs`，`main.rs` |
 | 平均・率の集計 | `socsim-metrics::stats` | `eval.rs`，`main.rs` |
 | 論文アンカー PASS/off 再現ハーネス | `socsim-reproduce` | `anchors.rs`，`main.rs` |
-| タイムスタンプ結果ディレクトリ + CSV/JSON 書き出し | `socsim-results` | `main.rs` |
+| run ディレクトリ・命名・`config.json`・指標／イベント／報告値 | `runvault` | `record.rs`，`main.rs` |
 
-socsim crate は `Cargo.lock` で固定した git 依存として取り込む．`socsim-llm` は `live` フィーチャ付きで取り込むため，`ScriptedClient` mock と並んで Ollama→OpenAI ライブフォールバッククライアントが利用できる．
+socsim crate と `runvault` は `Cargo.lock` で固定した git 依存として取り込む．`socsim-llm` は `live` フィーチャ付きで取り込むため，`ScriptedClient` mock と並んで Ollama→OpenAI ライブフォールバッククライアントが利用できる．
 
 ## 二層決定論
 
@@ -86,7 +86,7 @@ E7 はモデルに「N パッケージをアンインストールする」スク
 
 ## 再現ハーネス — `anchors.rs`
 
-`PAPER_ANCHORS` は論文の定量参照値（E1 の逐語コピー率・正解率低下，E2 のアンカー行出現率，E3/E4 の順序反転・named-function 値，E5/E6 の GPT-3 更新率・リスク選択率，E7 のファイル削除率）を保持し，観測ルックアップとともに `socsim_reproduce::build_rows` へ渡す．ハーネスの機構 — PASS/off/NO_DATA 分類と CSV 書き出し — は `socsim-reproduce` にあり，値だけが jones2022 固有である．`reproduce` は最新 run の `metrics.csv`（実験単位）を読むか，`--mock` で全実験をオフライン実行して全アンカーの観測値を生成する．
+`PAPER_ANCHORS` は論文の定量参照値（E1 の逐語コピー率・正解率低下，E2 のアンカー行出現率，E3/E4 の順序反転・named-function 値，E5/E6 の GPT-3 更新率・リスク選択率，E7 のファイル削除率）を保持し，観測ルックアップとともに `socsim_reproduce::build_rows` へ渡す．ハーネスの機構 — PASS/off/NO_DATA 分類と CSV 書き出し — は `socsim-reproduce` にあり，値だけが jones2022 固有である．`reproduce` は直近に完了した `run` の観測（実験単位．`lineage.derived_from` に記録する）を読むか，`--mock` で全実験をオフライン実行して全アンカーの観測値を生成する．論文の値は run の `reference.csv` に，観測値は `metrics.csv` に，同じ指標名で入る．
 
 ## 注入とテスト
 

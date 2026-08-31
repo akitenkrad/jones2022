@@ -4,7 +4,7 @@
 
 A reimplementation of Jones & Steinhardt (2022), "Capturing Failures of Large Language Models via Human Cognitive Biases" ([arXiv:2202.12299](https://arxiv.org/abs/2202.12299)). The paper turns **human cognitive biases** into a recipe for systematically inducing qualitative failures of LLMs: hypothesize a failure mode, build a **semantic-preserving input transform** that should trigger it, and measure two things — does the transform **lower functional accuracy** (the sensitivity `Δ`), and does the output **carry the target failure feature** (the indicator rate `r`)? The transforms are entirely **black-box and logprob-free** — they read only the model's text output, never first-token probabilities — so they run on any model. The original study used Codex; that model (`davinci-001`) has been deprecated, so this reimplementation substitutes contemporary code models (Ollama `codellama` / `qwen2.5-coder` / `deepseek-coder` / `starcoder2`, with an OpenAI `gpt-4o-mini` fallback) and treats the **direction of the failure** as the reproduction target.
 
-The repository is built on the consolidated **socsim** library and is deliberately thin: it delegates LLM generation to `socsim-llm`, mean/rate aggregation to `socsim-metrics`, paper-anchor PASS/off classification to `socsim-reproduce`, and results I/O to `socsim-results`. The only jones2022-specific code is the semantic-preserving transforms, the failure indicators `φ`, and the execution / deletion sandbox (Rust `simulation/`) plus the Python analysis tools (`tools/`). It is a **probe + indicator pipeline**, not an ABM tick loop, so it pulls in no `socsim-core`/engine/grid/net.
+The repository is built on the consolidated **socsim** library and is deliberately thin: it delegates LLM generation to `socsim-llm`, mean/rate aggregation to `socsim-metrics`, paper-anchor PASS/off classification to `socsim-reproduce`, and the run record — the directory, its name, `config.json`, metrics, events and the paper's reported values — to [`runvault`](https://github.com/akitenkrad/rs-runvault). The only jones2022-specific code is the semantic-preserving transforms, the failure indicators `φ`, and the execution / deletion sandbox (Rust `simulation/`) plus the Python analysis tools (`tools/`). It is a **probe + indicator pipeline**, not an ABM tick loop, so it pulls in no `socsim-core`/engine/grid/net.
 
 ## Scope
 
@@ -48,15 +48,15 @@ cargo run --release -- reproduce --mock
 
 # === Python tools ===
 uv sync
-uv run jones-tools visualize results/latest
-uv run jones-tools reproduce-paper results/latest
+uv run jones-tools visualize
+uv run jones-tools reproduce-paper
 ```
 
 HumanEval ships as a small **bundled 8-problem subset** so everything runs offline. To run the full 164-problem set, fetch it once with `uv run jones-tools fetch-dataset` (downloads the official MIT-licensed set to `data/HumanEval.jsonl`, which the loader auto-detects under `--full`), or point the loader at any copy with `--dataset <HumanEval.jsonl>` — the chosen set and its size are always logged, never silently truncated. The full set is git-ignored; only the subset is tracked.
 
 The paper's other dataset, **MathEquations**, is the authors' own and is not public, so the replication synthesizes it. It ships as a curated 8-problem set and scales deterministically with `--math-count N --math-seed S` (the 8 stay a stable prefix; extras are generated from operator-precedence templates, each preserving the dataset's invariants). See [CLI](docs/cli.md#mathequations--the-generated-set-e3e4).
 
-Each `run` writes `results/{timestamp}/` with `config.json` and `metrics.csv`; `sweep` writes `results/sweep_{timestamp}/` with `sweep_summary.csv` and `sweep_config.json`; `reproduce` adds `paper_anchors.csv` and `reproduce_summary.csv`. The Python tools render PNGs alongside them.
+Every subcommand records one runvault run under `results/jones/{run_slug}/`. A `run` writes its per-condition observations to `events.jsonl` and its run-level aggregates to `metrics.csv`; a `sweep` is a parent run whose children are the individual conditions; `reproduce` puts the paper's values in `reference.csv`, the observations in `metrics.csv`, and the verdict table in `artifacts/`. The Python tools render PNGs into `results/jones/figures/{run_slug}/`, outside the run.
 
 > **Reproduction honesty.** `--mock` proves the *plumbing* — it is a deterministic scripted stub that exhibits each bias on a fixed fraction of items (not tuned to any paper value), so it never "passes" the anchors for real. Genuine agreement with the paper's reference values can only come from a live model.
 
@@ -70,7 +70,7 @@ Each `run` writes `results/{timestamp}/` with `config.json` and `metrics.csv`; `
 
 ## Dependencies
 
-- **Rust**: `clap` (CLI), `serde` + `serde_json` (config), `anyhow` (errors), and the socsim crates — `socsim-llm` (logprob-free generation with the live Ollama→OpenAI fallback + prompt cache; `ScriptedClient` for mocks), `socsim-metrics` (`stats::mean`), `socsim-reproduce` (paper-anchor harness), `socsim-results` (timestamped results + CSV/JSON writers). The socsim commit is pinned via `Cargo.lock`. Functional-accuracy scoring shells out to a Python interpreter for the sandboxed unit tests; live generation needs a local Ollama server.
+- **Rust**: `clap` (CLI), `serde` + `serde_json` (config), `anyhow` (errors), and the socsim crates — `socsim-llm` (logprob-free generation with the live Ollama→OpenAI fallback + prompt cache; `ScriptedClient` for mocks), `socsim-metrics` (`stats::mean`), `socsim-reproduce` (paper-anchor harness), and `runvault` (the run record). The socsim commit is pinned via `Cargo.lock`. Functional-accuracy scoring shells out to a Python interpreter for the sandboxed unit tests; live generation needs a local Ollama server.
 - **Python** (`uv`): `matplotlib`, `numpy`, `pandas`.
 
 ## License

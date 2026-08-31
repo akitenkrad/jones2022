@@ -23,10 +23,10 @@ cargo run --release -- reproduce --mock
 
 ```bash
 cargo run --release -- run --experiment framing --model codellama --seed 42
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
-`metrics.csv` は `baseline` の正解率と，framing 行ごとの変換後正解率・感度 `Δ`・逐語コピー率 `r` を持つ．`visualize` は `fig_accuracy.png` と `fig_indicator.png` を書き出す．論文の framing 効果は 22.3–30.5pt の正解率低下と最大 81% の逐語コピー率である；頑健な現代モデルは大半の framing 行に抵抗しつつ，`return False` のような型仕様と矛盾する行では効果を示すことがある．
+run の `events.jsonl` は `baseline` の正解率と，framing 行ごとの変換後正解率・感度 `Δ`・逐語コピー率 `r` を持つ．`visualize` は `fig_accuracy.png` と `fig_indicator.png` を書き出す．論文の framing 効果は 22.3–30.5pt の正解率低下と最大 81% の逐語コピー率である；頑健な現代モデルは大半の framing 行に抵抗しつつ，`return False` のような型仕様と矛盾する行では効果を示すことがある．
 
 ## 3. スコープ付きライブスモーク（数問のみ）
 
@@ -52,7 +52,7 @@ MathEquations 実験は外部データを必要としない — セットはコ�
 ```bash
 cargo run --release -- run --experiment availability --mock
 cargo run --release -- run --experiment attribute-substitution --mock
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
 各々 `baseline` 行と 1 つの `transform` 行を書き出す．`transform` 行の `Δ` は正解率低下，`r` は出力が distractor になる率（E3 は unary-first 解，E4 は named 演算）である．
@@ -70,7 +70,7 @@ cargo run --release -- run --experiment availability --mock --math-count 90 --ma
 ```bash
 cargo run --release -- run --experiment gpt3-anchoring --mock --anchor-ratio 0.5
 cargo run --release -- run --experiment gpt3-framing   --mock --respondents 20
-uv run jones-tools visualize results/latest
+uv run jones-tools visualize
 ```
 
 E5 はアンカー方向更新率（高 / 低）と gibberish 率を，E6 はフレーム別リスク選択率を報告し，die（損失）フレームが save（利得）フレームよりリスキーになるべきである．
@@ -81,16 +81,16 @@ E5 はアンカー方向更新率（高 / 低）と gibberish 率を，E6 はフ
 
 ```bash
 cargo run --release -- sweep --experiment file-deletion --mock --num-packages-values 1,2,3,4,5,6
-uv run jones-tools visualize-sweep results/sweep_<stamp>
+uv run jones-tools visualize-sweep
 ```
 
-生成された「アンインストール」スクリプトは削除ガード下で走るため，何も実際には削除されない．`sweep_summary.csv` はパッケージ数ごとの保護ファイル削除率を持ち，`visualize-sweep` がそれを描く．
+生成された「アンインストール」スクリプトは削除ガード下で走るため，何も実際には削除されない．パッケージ数ごとに子 run ができ，その `events.jsonl` が保護ファイル削除率を持つ．`visualize-sweep` がそれらを積んで Fig 6 のビューにする．
 
 ## 7. アンカー比率の掃引（E5）
 
 ```bash
 cargo run --release -- sweep --experiment gpt3-anchoring --mock --anchor-ratio-values 0.1,0.2,0.5,0.8
-uv run jones-tools visualize-sweep results/sweep_<stamp>
+uv run jones-tools visualize-sweep
 ```
 
 `visualize-sweep` はアンカー方向更新率（と gibberish 率）をアンカー比率 `p` に対して描く — 論文のアンカリング効果は `p` の増加とともに強まる．
@@ -105,12 +105,12 @@ for m in codellama qwen2.5-coder deepseek-coder starcoder2; do
 done
 ```
 
-各モデルが自身の結果ツリーを書き出す．`metrics.csv` の `Δ` と `r` の列を比較する．論文の主張は，強度がモデルサイズや命令チューニングで変動しても，失敗の方向はモデル世代を越えて保存される，というものである．
+各モデルが自身の結果ツリーを書き出す．`events.jsonl` の `Δ` と `r` を比較する．論文の主張は，強度がモデルサイズや命令チューニングで変動しても，失敗の方向はモデル世代を越えて保存される，というものである．
 
 ## 9. run の確認
 
 ```bash
-uv run jones-tools show-experiment-settings results/latest
+uv run jones-tools show-experiment-settings
 ```
 
-run の `config.json`（実験・モデル・seed・データセット・実験別パラメータ）を整形表示し，`results/latest` シンボリックリンクを解決する．
+`run.json` が持つ同一性と，`config.json` の `parameters`（実行条件）を整形表示する．

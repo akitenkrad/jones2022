@@ -1,7 +1,7 @@
 """論文アンカー一括再現の図出力．
 
-Rust 側 `jones reproduce` が書き出す `reproduce_summary.csv` を読む．スキーマは
-`socsim-reproduce` 共通:
+Rust 側 `jones reproduce` が run の `artifacts/` に書く `reproduce_summary.csv` を
+読む．スキーマは `socsim-reproduce` 共通:
 
     study,table_or_fig,condition,metric,paper_value,observed_value,tolerance,status
 
@@ -9,9 +9,16 @@ Rust 側 `jones reproduce` が書き出す `reproduce_summary.csv` を読む．�
 アンカー別の observed-vs-paper 比較図 (`reproduce_paper.png`) を生成し，PASS/off/NO_DATA
 を集計表示する．色分け: PASS=緑 / off=オレンジ / NO_DATA=灰．
 
+同じ数値は run の `reference.csv`（論文の報告値）と `metrics.csv`（観測値）にも
+名前つきで入っている．こちらの表が持つのは許容幅と PASS/off/NO_DATA の判定．
+
+--results-dir を省略すると
+`runvault path --experiment jones --latest --subcommand reproduce`
+が返す run を対象にする．図は run の外に書く．
+
 Usage:
-    jones-tools reproduce-paper [--results-dir results/latest] [--summary-csv PATH]
-                                [--output-dir DIR]
+    jones-tools reproduce-paper [--results-dir RESULTS_DIR] [--summary-csv PATH]
+                                [--output-dir DIR] [--results-root ROOT]
 """
 from __future__ import annotations
 
@@ -19,6 +26,8 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+from jones_tools.run_io import latest_run, output_dir, reproduce_summary_path
 
 _STATUS_COLOR = {
     "PASS": "#2ca02c",
@@ -46,9 +55,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="結果ディレクトリ (位置引数; --results-dir と同義)",
     )
-    parser.add_argument("--results-dir", "--results_dir", default="results/latest")
+    parser.add_argument("--results-dir", "--results_dir", default=None)
     parser.add_argument("--summary-csv", "--summary_csv", default=None)
     parser.add_argument("--output-dir", "--output_dir", default=None)
+    parser.add_argument(
+        "--results-root",
+        default="results",
+        help="run を探す結果ルート (--results-dir 省略時に使う; default: results)",
+    )
     args = parser.parse_args(argv)
     if args.results_dir_pos:
         args.results_dir = args.results_dir_pos
@@ -63,14 +77,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.summary_csv:
         summary_path = _resolve(args.summary_csv)
+        results_dir = None
     else:
-        summary_path = _resolve(args.results_dir) / "reproduce_summary.csv"
+        results_dir = args.results_dir or latest_run(
+            args.results_root, subcommand="reproduce", standalone=False
+        )
+        summary_path = Path(reproduce_summary_path(_resolve(results_dir)))
     if not summary_path.exists():
         print(f"エラー: summary CSV がありません: {summary_path}", file=sys.stderr)
         return 1
 
-    output_dir = _resolve(args.output_dir) if args.output_dir else summary_path.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.output_dir:
+        out_dir = _resolve(args.output_dir)
+    elif results_dir is not None:
+        out_dir = Path(output_dir(_resolve(results_dir)))
+    else:
+        out_dir = summary_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(summary_path)
     if df.empty:
@@ -125,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         fontsize=8,
     )
     fig.tight_layout()
-    out = output_dir / "reproduce_paper.png"
+    out = out_dir / "reproduce_paper.png"
     fig.savefig(out, dpi=120)
     plt.close(fig)
     print(f"保存: {out}")

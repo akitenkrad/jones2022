@@ -32,9 +32,14 @@ use socsim_reproduce::{build_rows, write_paper_anchors, write_reproduce_summary}
 
 use jones2022_simulation::config::{Experiment, DEFAULT_ANCHOR_RATIO, DEFAULT_NUM_PACKAGES};
 use jones2022_simulation::datasets::{load_humaneval, math_equations, math_equations_n, Problem};
-use jones2022_simulation::eval::{run_experiment, MetricRow};
-use jones2022_simulation::filedelete::{run_file_deletion, DEFAULT_TRIALS};
-use jones2022_simulation::gpt3::{anchor_records, run_gpt3_anchoring, run_gpt3_framing};
+use jones2022_simulation::eval::{query_count, run_experiment, run_experiment_observed, MetricRow};
+use jones2022_simulation::filedelete::{
+    run_file_deletion, run_file_deletion_observed, DEFAULT_TRIALS,
+};
+use jones2022_simulation::gpt3::{
+    anchor_records, anchoring_query_count, framing_query_count, run_gpt3_anchoring,
+    run_gpt3_anchoring_observed, run_gpt3_framing, run_gpt3_framing_observed,
+};
 use jones2022_simulation::{
     build_file_deletion_mock, build_gpt3_anchoring_mock, build_gpt3_framing_mock,
     build_mock_client, PAPER_ANCHORS,
@@ -398,7 +403,7 @@ fn cmd_run(args: RunArgs) -> Result<()> {
     // が failed として残るためでもある．
     let mut rv = start_run(&args.results, &conditions, None)?;
 
-    let (rows, n_units) = execute(&args)?;
+    let (rows, n_units) = execute(&args, &rv)?;
     record::log_conditions(&mut rv, &rows);
     record::log_run_summary(&mut rv, &rows, n_units);
 
@@ -416,12 +421,33 @@ fn cmd_run(args: RunArgs) -> Result<()> {
 }
 
 /// 1 実験を回して (条件行, 観測主体の数) を返す．
-fn execute(args: &RunArgs) -> Result<(Vec<MetricRow>, usize)> {
+fn execute(args: &RunArgs, rv: &Run) -> Result<(Vec<MetricRow>, usize)> {
+    // 進捗の 1 単位は «モデルへの問い合わせ 1 回»．費用がそこにあり，E1-E4 では
+    // 1 回の問い合わせにサンドボックスでのテスト実行が続く．実験を単位にすると
+    // tick が 1 つしかない．
+    //
+    // 分母は正確に分かる．どの実験も «問題数 × パス数» や «回答者数 × フレーム数»
+    // のように，走らせる前に数えられる決まった回数だけ問い合わせる．早期に
+    // 打ち切る条件はどこにもない．
+    //
+    // stage を開くのはここ — 問題数は `load_humaneval` を通ったあとにしか
+    // 分からず，`--limit` / `--full` / データセットの指定で変わる．
     Ok(match args.experiment {
         Experiment::Framing | Experiment::Anchoring => {
             let problems = load_humaneval(args.dataset.as_deref(), args.full, args.limit)?;
+            // stage を開くのはクライアントを組む前．ライブ経路の `build_live` は
+            // プロンプトキャッシュをディスクから読むので，そのぶんが報告の無い
+            // 空白になる．先に開けば 0/N の行がその前に落ちる．
+            let mut stage = rv.stage("queries", query_count(args.experiment, problems.len()));
             let client = code_client(args, &problems)?;
-            let rows = run_experiment(client.as_ref(), args.experiment, &problems, args.seed);
+            let rows = run_experiment_observed(
+                client.as_ref(),
+                args.experiment,
+                &problems,
+                args.seed,
+                &mut || stage.tick(),
+            );
+            stage.close();
             (rows, problems.len())
         }
         Experiment::Availability | Experiment::AttributeSubstitution => {
@@ -429,24 +455,53 @@ fn execute(args: &RunArgs) -> Result<(Vec<MetricRow>, usize)> {
             if args.limit > 0 && problems.len() > args.limit {
                 problems.truncate(args.limit);
             }
+            let mut stage = rv.stage("queries", query_count(args.experiment, problems.len()));
             let client = code_client(args, &problems)?;
-            let rows = run_experiment(client.as_ref(), args.experiment, &problems, args.seed);
+            let rows = run_experiment_observed(
+                client.as_ref(),
+                args.experiment,
+                &problems,
+                args.seed,
+                &mut || stage.tick(),
+            );
+            stage.close();
             (rows, problems.len())
         }
         Experiment::Gpt3Anchoring => {
+            let mut stage = rv.stage("queries", anchoring_query_count());
             let client = simple_client(args.mock, build_gpt3_anchoring_mock, args)?;
-            let rows = run_gpt3_anchoring(client.as_ref(), args.anchor_ratio, args.seed);
+            let rows = run_gpt3_anchoring_observed(
+                client.as_ref(),
+                args.anchor_ratio,
+                args.seed,
+                &mut || stage.tick(),
+            );
+            stage.close();
             (rows, anchor_records(args.anchor_ratio).len())
         }
         Experiment::Gpt3Framing => {
+            let mut stage = rv.stage("queries", framing_query_count(args.respondents));
             let client = simple_client(args.mock, build_gpt3_framing_mock, args)?;
-            let rows = run_gpt3_framing(client.as_ref(), args.respondents, args.seed);
+            let rows = run_gpt3_framing_observed(
+                client.as_ref(),
+                args.respondents,
+                args.seed,
+                &mut || stage.tick(),
+            );
+            stage.close();
             (rows, args.respondents)
         }
         Experiment::FileDeletion => {
+            let mut stage = rv.stage("trials", args.trials);
             let client = simple_client(args.mock, build_file_deletion_mock, args)?;
-            let rows =
-                run_file_deletion(client.as_ref(), args.num_packages, args.trials, args.seed);
+            let rows = run_file_deletion_observed(
+                client.as_ref(),
+                args.num_packages,
+                args.trials,
+                args.seed,
+                &mut || stage.tick(),
+            );
+            stage.close();
             (rows, args.trials)
         }
     })
@@ -603,6 +658,19 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
         build_live(&args.model, args.seed, &args.results)?
     };
 
+    // 掃引全体で stage を 1 つ．条件ごとに開け直すと小さな 100% が並ぶだけで，
+    // 掃引全体のどこにいるかは分からない．単位は run と同じ «問い合わせ 1 回»
+    // (file-deletion は 1 試行 = 1 問い合わせ + サンドボックス実行)．
+    //
+    // 掃引しているのは `num_packages` (プロンプトに並べるパッケージ数) と
+    // `anchor_ratio` (アンカーを付ける割合) で，どちらも問い合わせの «回数» を
+    // 変えない — 条件ごとの回数は等しいので，重みではなく数える．
+    let per_point = match args.experiment {
+        Experiment::FileDeletion => args.trials,
+        _ => anchoring_query_count(),
+    };
+    let mut stage = parent.stage("queries", points.len() * per_point);
+
     for point in &points {
         let mut child = start_run(
             &args.results,
@@ -616,16 +684,22 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
 
         let (rows, n_units) = match args.experiment {
             Experiment::FileDeletion => (
-                run_file_deletion(
+                run_file_deletion_observed(
                     client.as_ref(),
                     point.conditions.num_packages,
                     args.trials,
                     args.seed,
+                    &mut || stage.tick(),
                 ),
                 args.trials,
             ),
             _ => (
-                run_gpt3_anchoring(client.as_ref(), point.conditions.anchor_ratio, args.seed),
+                run_gpt3_anchoring_observed(
+                    client.as_ref(),
+                    point.conditions.anchor_ratio,
+                    args.seed,
+                    &mut || stage.tick(),
+                ),
                 anchor_records(point.conditions.anchor_ratio).len(),
             ),
         };
@@ -638,6 +712,10 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
 
         child.finish().context("runvault: 子 run の完了に失敗")?;
     }
+
+    // manifest.csv は finish() で封をされる．その後に 1 行足せば，manifest が
+    // 食い違うダイジェストを持つことになる．
+    stage.close();
 
     let dir = parent
         .finish()

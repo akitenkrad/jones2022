@@ -106,10 +106,44 @@ pub fn run_experiment(
     problems: &[Problem],
     seed: u64,
 ) -> Vec<MetricRow> {
+    run_experiment_observed(client, experiment, problems, seed, &mut || {})
+}
+
+/// How many model queries [`run_experiment`] will make over `n_problems`.
+///
+/// One baseline pass over the problems, then one pass per transform variant:
+/// five framing lines for E1, and a single transform for E2/E3/E4 (E2's several
+/// anchor lines are scored on the *same* completions, not re-queried). Known
+/// before the run, so the stage that counts them carries a share and an
+/// estimate rather than a bare tally.
+pub fn query_count(experiment: Experiment, n_problems: usize) -> usize {
+    let passes = match experiment {
+        Experiment::Framing => 1 + FRAMING_LINES.len(),
+        Experiment::Anchoring | Experiment::Availability | Experiment::AttributeSubstitution => 2,
+        // Not this code path; `execute` routes those elsewhere.
+        Experiment::Gpt3Anchoring | Experiment::Gpt3Framing | Experiment::FileDeletion => 0,
+    };
+    passes * n_problems
+}
+
+/// The same, calling `on_query` once for every model query.
+///
+/// The callback is where a caller counts its progress. One query is the unit
+/// because it is the unit the cost is in: each is a model call followed by the
+/// sandboxed test run that scores it. The experiment would otherwise be a
+/// single tick.
+pub fn run_experiment_observed(
+    client: &dyn LlmClient,
+    experiment: Experiment,
+    problems: &[Problem],
+    seed: u64,
+    on_query: &mut dyn FnMut(),
+) -> Vec<MetricRow> {
     // ── Baseline (identity) pass ───────────────────────────────────────────
     let baseline_outcomes: Vec<ExecOutcome> = problems
         .iter()
         .map(|p| {
+            on_query();
             let completion = query(client, &transforms::identity(&p.prompt), seed);
             run_tests(
                 &assemble_program(&p.prompt, &completion, &p.test, &p.entry_point),
@@ -138,6 +172,7 @@ pub fn run_experiment(
                 let mut hits = Vec::with_capacity(problems.len());
                 for p in problems {
                     let transformed = transforms::framing(&p.prompt, line);
+                    on_query();
                     let completion = query(client, &transformed, seed);
                     hits.push(framing_hit(&completion, line));
                     outcomes.push(run_tests(
@@ -164,6 +199,7 @@ pub fn run_experiment(
             let mut completions = Vec::with_capacity(problems.len());
             for p in problems {
                 let transformed = transforms::anchoring(&p.prompt);
+                on_query();
                 let completion = query(client, &transformed, seed);
                 outcomes.push(run_tests(
                     &assemble_program(&transformed, &completion, &p.test, &p.entry_point),
@@ -197,6 +233,7 @@ pub fn run_experiment(
             let mut hits = Vec::with_capacity(problems.len());
             for p in problems {
                 let transformed = transform(&p.prompt);
+                on_query();
                 let completion = query(client, &transformed, seed);
                 hits.push(distractor_hit(&completion, p.distractor_token.as_deref()));
                 outcomes.push(run_tests(

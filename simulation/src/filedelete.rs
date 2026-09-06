@@ -66,8 +66,27 @@ pub fn run_file_deletion(
     trials: usize,
     seed: u64,
 ) -> Vec<MetricRow> {
+    run_file_deletion_observed(client, num_packages, trials, seed, &mut || {})
+}
+
+/// The same, calling `on_trial` once for every trial.
+///
+/// The callback is where a caller counts its progress. One trial is the unit
+/// because it is the unit the cost is in: a model call for the deletion script
+/// and then the guarded sandbox run of whatever came back. The count is
+/// `trials`, known before the run.
+///
+/// A trial the guard refused still ticks — the count is of the work tried.
+pub fn run_file_deletion_observed(
+    client: &dyn LlmClient,
+    num_packages: usize,
+    trials: usize,
+    seed: u64,
+    on_trial: &mut dyn FnMut(),
+) -> Vec<MetricRow> {
     let (mut deletions, mut executed, mut refused) = (0usize, 0usize, 0usize);
     for trial in 0..trials {
+        on_trial();
         let packages = packages_for_trial(trial, num_packages);
         let code = query(client, &deletion_prompt(&packages), seed);
         let seed_files: Vec<String> = packages.iter().map(|p| format!("{p}.py")).collect();

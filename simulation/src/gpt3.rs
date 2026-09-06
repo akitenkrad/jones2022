@@ -184,14 +184,39 @@ fn answer_row(experiment: &str, variant: &str, n: usize, rate: f64) -> MetricRow
 /// E5: for each item, compare anchored estimates to the baseline and report the
 /// toward-anchor update rate per side plus the gibberish rate.
 pub fn run_gpt3_anchoring(client: &dyn LlmClient, p: f64, seed: u64) -> Vec<MetricRow> {
+    run_gpt3_anchoring_observed(client, p, seed, &mut || {})
+}
+
+/// How many model queries [`run_gpt3_anchoring`] will make.
+///
+/// Three per estimation item — unanchored, high anchor, low anchor. Known
+/// before the run.
+pub fn anchoring_query_count() -> usize {
+    3 * estimation_items().len()
+}
+
+/// The same, calling `on_query` once for every model query.
+///
+/// The callback is where a caller counts its progress. One query is the unit
+/// because it is the unit the cost is in: the respondent set is a list and each
+/// entry costs one model call. The experiment would otherwise be a single tick.
+pub fn run_gpt3_anchoring_observed(
+    client: &dyn LlmClient,
+    p: f64,
+    seed: u64,
+    on_query: &mut dyn FnMut(),
+) -> Vec<MetricRow> {
     let items = estimation_items();
     let (mut high_updates, mut low_updates) = (0usize, 0usize);
     let (mut high_n, mut low_n) = (0usize, 0usize);
     let (mut gibberish, mut total) = (0usize, 0usize);
 
     for item in &items {
+        on_query();
         let base = query(client, &estimation_prompt(item, AnchorSide::None, p), seed);
+        on_query();
         let high = query(client, &estimation_prompt(item, AnchorSide::High, p), seed);
+        on_query();
         let low = query(client, &estimation_prompt(item, AnchorSide::Low, p), seed);
         for r in [&base, &high, &low] {
             total += 1;
@@ -240,10 +265,31 @@ pub fn run_gpt3_anchoring(client: &dyn LlmClient, p: f64, seed: u64) -> Vec<Metr
 
 /// E6: risky-option (B) choice rate per frame over `n_respondents`.
 pub fn run_gpt3_framing(client: &dyn LlmClient, n_respondents: usize, seed: u64) -> Vec<MetricRow> {
+    run_gpt3_framing_observed(client, n_respondents, seed, &mut || {})
+}
+
+/// How many model queries [`run_gpt3_framing`] will make over `n_respondents`.
+///
+/// Every respondent is asked under both frames. Known before the run.
+pub fn framing_query_count(n_respondents: usize) -> usize {
+    2 * n_respondents
+}
+
+/// The same, calling `on_query` once for every model query.
+///
+/// The callback is where a caller counts its progress; see
+/// [`run_gpt3_anchoring_observed`] for why the query is the unit.
+pub fn run_gpt3_framing_observed(
+    client: &dyn LlmClient,
+    n_respondents: usize,
+    seed: u64,
+    on_query: &mut dyn FnMut(),
+) -> Vec<MetricRow> {
     let mut rows = Vec::new();
     for frame in [Frame::Save, Frame::Die] {
         let (mut risky, mut n) = (0usize, 0usize);
         for i in 0..n_respondents {
+            on_query();
             let resp = query(client, &framing_prompt(i, frame), seed);
             if let Some(is_risky) = parse_choice(&resp) {
                 n += 1;

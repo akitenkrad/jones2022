@@ -1,3 +1,156 @@
-# Metric descriptions are not written yet (MYTASK-3382). Until they are,
-# runvault records undeclared metrics instead of refusing them.
-require_docs = false
+# 指標が何を測っているか (runvault の宣言．rs-runvault docs/metrics.ja.md)．
+#
+# 名前は `simulation/src/record.rs` と `simulation/src/anchors.rs` が記録するものと一致していなければならない．
+#
+# `direction` は «値が大きいほど良いか»．模型の状態や到達量は成績ではないので
+# `none` とし，再現精度やキャッシュ効率のように評価方向が定まる量だけ `up` /
+# `down` とする．
+
+[metrics."n_conditions"]
+meaning   = "この run で評価した変換条件の数"
+unit      = "count"
+direction = "none"
+scope     = ["run"]
+
+[metrics."baseline_functional_accuracy"]
+meaning   = "変換を加えていない問題に対する機能的正答率"
+unit      = "ratio"
+direction = "up"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."max_indicator_rate"]
+meaning   = "評価条件のうち最も高かった失敗指標の出現率"
+unit      = "ratio"
+direction = "down"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."mean_indicator_rate"]
+meaning   = "評価条件にわたる失敗指標の出現率の平均"
+unit      = "ratio"
+direction = "down"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."mean_delta"]
+meaning   = "評価条件にわたる基準からの正答率低下量の平均"
+unit      = "ratio"
+direction = "down"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."framing_verbatim_rate"]
+meaning   = "フレーミング条件で問題文を逐語的に写した応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."framing_delta"]
+meaning   = "フレーミング条件による基準からの正答率低下量"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."anchor_forvar_rate"]
+meaning   = "アンカリング条件で `for var in` が現れた応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."anchor_printvar_rate"]
+meaning   = "アンカリング条件で `print(var)` が現れた応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."availability_delta"]
+meaning   = "利用可能性条件による基準からの正答率低下量"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."availability_unary_first_rate"]
+meaning   = "反転誤りのうち単項演算を先に適用した解答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."attribsub_delta"]
+meaning   = "属性置換条件による基準からの正答率低下量"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."attribsub_named_func_rate"]
+meaning   = "属性置換条件で名前付き関数を用いた応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."anchor_update_high"]
+meaning   = "高いアンカーへ推定値を更新した応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."gibberish_rate"]
+meaning   = "数値として解釈できない応答の割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."risky_save"]
+meaning   = "救命フレームでリスクのある選択肢を選んだ割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."risky_die"]
+meaning   = "死亡フレームでリスクのある選択肢を選んだ割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."file_deletion_rate"]
+meaning   = "3 個以上のパッケージを扱う条件で誤ってファイルを削除した割合"
+unit      = "ratio"
+direction = "none"
+range     = [0.0, 1.0]
+scope     = ["run"]
+
+[metrics."n_anchors"]
+meaning   = "照合した論文アンカーの数"
+unit      = "count"
+direction = "none"
+scope     = ["run"]
+
+[metrics."n_pass"]
+meaning   = "許容帯内だった論文アンカーの数"
+unit      = "count"
+direction = "up"
+scope     = ["run"]
+
+[metrics."n_off"]
+meaning   = "許容帯外だった論文アンカーの数"
+unit      = "count"
+direction = "down"
+scope     = ["run"]
+
+[metrics."n_no_data"]
+meaning   = "観測値が無く照合できなかった論文アンカーの数"
+unit      = "count"
+direction = "down"
+scope     = ["run"]

@@ -56,6 +56,9 @@ const DEFAULT_RESPONDENTS: usize = 10;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    /// Development run: write it under results/_scratch/ so it is never synced to the vault.
+    #[arg(long, global = true)]
+    scratch: bool,
 
     /// Ollama 接続先 URL（指定時は環境変数 OLLAMA_HOST を上書きする）．
     #[arg(long, global = true)]
@@ -166,13 +169,14 @@ struct ReproduceArgs {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    let scratch = cli.scratch;
     if let Some(host) = cli.ollama_host.as_deref() {
         std::env::set_var("OLLAMA_HOST", host);
     }
     match cli.command {
-        Commands::Run(args) => cmd_run(args),
-        Commands::Sweep(args) => cmd_sweep(args),
-        Commands::Reproduce(args) => cmd_reproduce(args),
+        Commands::Run(args) => cmd_run(args, scratch),
+        Commands::Sweep(args) => cmd_sweep(args, scratch),
+        Commands::Reproduce(args) => cmd_reproduce(args, scratch),
     }
 }
 
@@ -370,8 +374,10 @@ fn start_run(
     results_root: &Path,
     conditions: &Conditions,
     lineage: Option<Lineage>,
+    scratch: bool,
 ) -> Result<Run> {
     let mut options = RunOptions::new(record::EXPERIMENT, "run")
+        .scratch(scratch)
         .repo_id(record::REPO_ID)
         .domain(record::DOMAIN)
         .results_root(results_root)
@@ -390,7 +396,7 @@ fn start_run(
 
 // ───────────────────────────────── run ─────────────────────────────────────
 
-fn cmd_run(args: RunArgs) -> Result<()> {
+fn cmd_run(args: RunArgs, scratch: bool) -> Result<()> {
     if args.sandbox != "tempdir" {
         eprintln!(
             "note: --sandbox {:?} not implemented; using the tempdir deletion guard",
@@ -401,7 +407,7 @@ fn cmd_run(args: RunArgs) -> Result<()> {
     let conditions = Conditions::of_run(&args);
     // 実行の前に開始する．duration_sec を実測にするためであり，途中で落ちた run
     // が failed として残るためでもある．
-    let mut rv = start_run(&args.results, &conditions, None)?;
+    let mut rv = start_run(&args.results, &conditions, None, scratch)?;
 
     let (rows, n_units) = execute(&args, &rv)?;
     record::log_conditions(&mut rv, &rows);
@@ -573,7 +579,7 @@ struct SweepPoint {
     conditions: Conditions,
 }
 
-fn cmd_sweep(args: SweepArgs) -> Result<()> {
+fn cmd_sweep(args: SweepArgs, scratch: bool) -> Result<()> {
     let (param, points, values_json): (&str, Vec<SweepPoint>, Value) = match args.experiment {
         Experiment::FileDeletion => {
             let values: Vec<usize> = parse_list(&args.num_packages_values)?;
@@ -619,6 +625,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
     });
     let parent = Run::start(
         RunOptions::new(record::EXPERIMENT, "sweep")
+            .scratch(scratch)
             .repo_id(record::REPO_ID)
             .domain(record::DOMAIN)
             .results_root(&args.results)
@@ -680,6 +687,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
                 parent_run_uid: Some(parent_run_uid.clone()),
                 ..Default::default()
             }),
+            scratch,
         )?;
 
         let (rows, n_units) = match args.experiment {
@@ -727,7 +735,7 @@ fn cmd_sweep(args: SweepArgs) -> Result<()> {
 
 // ─────────────────────────────── reproduce ─────────────────────────────────
 
-fn cmd_reproduce(args: ReproduceArgs) -> Result<()> {
+fn cmd_reproduce(args: ReproduceArgs, scratch: bool) -> Result<()> {
     let source = if args.mock {
         None
     } else {
@@ -751,6 +759,7 @@ fn cmd_reproduce(args: ReproduceArgs) -> Result<()> {
         "source_run_uid": source_uid,
     });
     let mut options = RunOptions::new(record::EXPERIMENT, "reproduce")
+        .scratch(scratch)
         .repo_id(record::REPO_ID)
         // 乱数を使わない決定的な突き合わせ．simulation を名乗ると存在しない
         // master_seed を書くことになる．

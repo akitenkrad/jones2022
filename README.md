@@ -60,6 +60,11 @@ Every subcommand records one runvault run under `results/jones/{run_slug}/`. A `
 
 > **Reproduction honesty.** `--mock` proves the *plumbing* — it is a deterministic scripted stub that exhibits each bias on a fixed fraction of items (not tuned to any paper value), so it never "passes" the anchors for real. Genuine agreement with the paper's reference values can only come from a live model.
 
+
+## Scratch runs
+
+Use `--scratch` for development, debugging, and smoke-test runs. Scratch runs are created under `results/_scratch/`, are never synced to the vault, and the latest scratch run can be located with `runvault path --scratch`.
+
 ## Documentation
 
 - [The studies](docs/studies.md) — what each experiment (E1–E7) tests, its transform `T`, indicator `φ`, dataset, and paper anchor values.

@@ -190,6 +190,7 @@ fn build_live(model: &str, seed: u64, results: &Path) -> Result<Box<dyn LlmClien
     std::env::set_var("OLLAMA_MODEL", model);
     std::env::set_var("OPENAI_MODEL", model);
     let settings = LlmSettings {
+        think: None,
         temperature: 0.0,
         seed,
         cache_path: Some(
